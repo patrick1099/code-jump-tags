@@ -1,0 +1,415 @@
+{
+  "name": "code-jump-tags",
+  "displayName": "Code Jump Tags",
+  "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
+  "publisher": "patrick",
+  "version": "0.1.0",
+  "preview": true,
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "author": {
+    "name": "patrick"
+  },
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "icon": "images/icon.png",
+  "engines": {
+    "vscode": "^1.66.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "navigation",
+    "bookmarks",
+    "annotations",
+    "tags",
+    "notes",
+    "jump-links",
+    "code-review"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension-node.js",
+  "browser": "./dist/extension-web.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Code Jump Tags",
+      "properties": {
+        "codeJumpTags.showMarkers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Specifies whether or not to show tag markers in the editor gutter."
+        },
+        "codeJumpTags.notePosition": {
+          "type": "string",
+          "enum": [
+            "above",
+            "end"
+          ],
+          "enumDescriptions": [
+            "在标记行上方用 CodeLens 显示注释(CodeTour 风格,会多占一行)",
+            "在标记行行尾内联显示注释(紧凑,但可能挤动行尾代码注释)"
+          ],
+          "default": "above",
+          "description": "Where to show tag note text: above the marked line with CodeLens, or inline at the end of the line."
+        },
+        "codeJumpTags.confirmDelete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask before deleting tags or folders. Deleted entries can be restored from trash."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "codeJumpTags.addTourStep",
+        "title": "添加标签"
+      },
+      {
+        "command": "codeJumpTags.copyTagLink",
+        "title": "复制为链接",
+        "category": "Code Jump Tags",
+        "icon": "$(link)"
+      },
+      {
+        "command": "codeJumpTags.moveTourStepForward",
+        "title": "下移标签",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "codeJumpTags.moveTourStepBack",
+        "title": "上移标签",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codeJumpTags.deleteTourStep",
+        "title": "删除标签"
+      },
+      {
+        "command": "codeJumpTags.saveTourStep",
+        "title": "保存标签",
+        "enablement": "!commentIsEmpty"
+      },
+      {
+        "command": "codeJumpTags.hideMarkers",
+        "title": "隐藏标签标记",
+        "category": "Code Jump Tags",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "codeJumpTags.showMarkers",
+        "title": "显示标签标记",
+        "category": "Code Jump Tags",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "codeJumpTags.toggleEditMode",
+        "title": "进入标签编辑模式",
+        "category": "Code Jump Tags",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codeJumpTags.exitEditMode",
+        "title": "退出标签编辑模式",
+        "category": "Code Jump Tags",
+        "icon": "$(check)"
+      },
+      {
+        "command": "codeJumpTags.newFolder",
+        "title": "新建文件夹",
+        "category": "Code Jump Tags",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "codeJumpTags.deleteFolder",
+        "title": "删除文件夹",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.renameFolder",
+        "title": "重命名文件夹",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.copyFolderLinks",
+        "title": "复制文件夹内全部链接",
+        "category": "Code Jump Tags",
+        "icon": "$(references)"
+      },
+      {
+        "command": "codeJumpTags.saveTagEdit",
+        "title": "保存注释",
+        "icon": "$(check)"
+      },
+      {
+        "command": "codeJumpTags.cancelTagEdit",
+        "title": "取消",
+        "icon": "$(close)"
+      },
+      {
+        "command": "codeJumpTags.deleteFromEditor",
+        "title": "删除此注释",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "codeJumpTags.restoreFromTrash",
+        "title": "从回收站恢复",
+        "category": "Code Jump Tags",
+        "icon": "$(history)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "codeJumpTags.addTourStep",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.copyTagLink",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.deleteTourStep",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.saveTourStep",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.hideMarkers",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.showMarkers",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.deleteFolder",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.renameFolder",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.copyFolderLinks",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.saveTagEdit",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.cancelTagEdit",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.deleteFromEditor",
+          "when": "false"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "codeJumpTags.addTourStep",
+          "group": "inline",
+          "when": "commentController == codeJumpTags && commentThreadIsEmpty"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "codeJumpTags.deleteFromEditor",
+          "group": "inline@1",
+          "when": "commentController == codeJumpTags-edit"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "codeJumpTags.moveTourStepBack",
+          "group": "move@1",
+          "when": "commentController == codeJumpTags && codeJumpTags:canEditTour && commentThread =~ /hasPrevious/"
+        },
+        {
+          "command": "codeJumpTags.moveTourStepForward",
+          "group": "move@2",
+          "when": "commentController == codeJumpTags && codeJumpTags:canEditTour && commentThread =~ /hasNext/"
+        },
+        {
+          "command": "codeJumpTags.deleteTourStep",
+          "group": "mutate@2",
+          "when": "commentController == codeJumpTags && codeJumpTags:canEditTour"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "codeJumpTags.saveTourStep",
+          "group": "inline@2",
+          "when": "commentController == codeJumpTags && codeJumpTags:recording"
+        },
+        {
+          "command": "codeJumpTags.saveTagEdit",
+          "group": "inline@1",
+          "when": "commentController == codeJumpTags-edit"
+        },
+        {
+          "command": "codeJumpTags.cancelTagEdit",
+          "group": "inline@2",
+          "when": "commentController == codeJumpTags-edit"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "codeJumpTags.hideMarkers",
+          "when": "view == codeJumpTags.tours && codeJumpTags:showingMarkers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codeJumpTags.showMarkers",
+          "when": "view == codeJumpTags.tours && !codeJumpTags:showingMarkers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codeJumpTags.toggleEditMode",
+          "when": "view == codeJumpTags.tours && !codeJumpTags:isEditing",
+          "group": "navigation@3"
+        },
+        {
+          "command": "codeJumpTags.exitEditMode",
+          "when": "view == codeJumpTags.tours && codeJumpTags:isEditing",
+          "group": "navigation@3"
+        },
+        {
+          "command": "codeJumpTags.newFolder",
+          "when": "view == codeJumpTags.tours",
+          "group": "navigation@4"
+        },
+        {
+          "command": "codeJumpTags.restoreFromTrash",
+          "when": "view == codeJumpTags.tours",
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codeJumpTags.moveTourStepBack",
+          "when": "viewItem =~ /^codeJumpTags.tourStep.hasPrevious/",
+          "group": "inline@1"
+        },
+        {
+          "command": "codeJumpTags.moveTourStepForward",
+          "when": "viewItem =~ /codeJumpTags.tourStep.*(.hasNext)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "codeJumpTags.moveTourStepBack",
+          "when": "viewItem =~ /^codeJumpTags.tourStep.hasPrevious/",
+          "group": "basic@1"
+        },
+        {
+          "command": "codeJumpTags.moveTourStepForward",
+          "when": "viewItem =~ /codeJumpTags.tourStep.*(.hasNext)/",
+          "group": "basic@2"
+        },
+        {
+          "command": "codeJumpTags.deleteTourStep",
+          "when": "viewItem =~ /^codeJumpTags.tourStep/",
+          "group": "manage@2"
+        },
+        {
+          "command": "codeJumpTags.copyTagLink",
+          "when": "viewItem =~ /^codeJumpTags.tourStep/",
+          "group": "change@3"
+        },
+        {
+          "command": "codeJumpTags.renameFolder",
+          "when": "view == codeJumpTags.tours && viewItem =~ /^codeJumpTags.tour(\\.|$)/",
+          "group": "change@1"
+        },
+        {
+          "command": "codeJumpTags.copyFolderLinks",
+          "when": "view == codeJumpTags.tours && viewItem =~ /^codeJumpTags.tour(\\.|$)/",
+          "group": "change@2"
+        },
+        {
+          "command": "codeJumpTags.deleteFolder",
+          "when": "view == codeJumpTags.tours && viewItem =~ /^codeJumpTags.tour(\\.|$)/",
+          "group": "manage@3"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "codeJumpTags.tours",
+          "name": "Code Jump Tags",
+          "when": "workspaceFolderCount != 0 || codeJumpTags:inTour"
+        }
+      ]
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "*.tour",
+        "url": "./schema.json"
+      }
+    ],
+    "languages": [
+      {
+        "id": "json",
+        "extensions": [
+          ".tour"
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "@types/jexl": "^2.2.0",
+    "axios": "^0.21.4",
+    "jexl": "^2.3.0",
+    "mobx": "^5.14.2",
+    "os-browserify": "0.3.0",
+    "path-browserify": "1.0.1",
+    "throttle-debounce": "^3.0.1",
+    "vsls": "^1.0.2532"
+  },
+  "devDependencies": {
+    "@types/node": "^18.14.0",
+    "@types/throttle-debounce": "^5.0.0",
+    "@types/vscode": "~1.66.0",
+    "@vscode/vsce": "^2.17.0",
+    "debug": "^4.3.4",
+    "eslint": "^8.34.0",
+    "ts-loader": "^9.4.2",
+    "typescript": "^4.9.5",
+    "vitest": "^2.1.0",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1",
+    "webpack-merge": "^5.8.0"
+  },
+  "scripts": {
+    "build": "webpack --mode production",
+    "vscode:prepublish": "npm run build",
+    "watch": "webpack --mode development --watch",
+    "package": "vsce package",
+    "test:unit": "vitest run"
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "trailingComma": "none"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/patrick1099/code-jump-tags.git"
+  },
+  "bugs": {
+    "url": "https://github.com/patrick1099/code-jump-tags/issues"
+  },
+  "homepage": "https://github.com/patrick1099/code-jump-tags#readme"
+}
