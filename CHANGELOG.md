@@ -15,7 +15,7 @@ Initial preview release of Code Jump Tags.
 - Added folder-based tag organization and tree actions.
 - Added annotated line markers, hover notes, and configurable note placement.
 - Added tag editing, delete confirmation, trash, and restore flows.
-- Added single-tag and folder link copying with `vscode://patrick.code-jump-tags/goto` links.
+- Added single-tag and folder link copying with `vscode://patrick1099.code-jump-tags/goto` links.
 - Added unit coverage for the pure tag tree, adapter, relocation, and trash logic.
 
 ## Attribution

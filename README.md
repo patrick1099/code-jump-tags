@@ -42,7 +42,7 @@ Use the **Code Jump Tags** tree to create folders, rename folders, move tags up 
 
 ### Copy Links
 
-Use **Copy as Link** on a tag to create a Markdown link backed by a `vscode://patrick.code-jump-tags/goto` deep link. Use **Copy Folder Links** to copy all links inside a folder.
+Use **Copy as Link** on a tag to create a Markdown link backed by a `vscode://patrick1099.code-jump-tags/goto` deep link. Use **Copy Folder Links** to copy all links inside a folder.
 
 ### Restore Deleted Tags
 
