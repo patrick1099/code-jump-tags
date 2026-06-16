@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.1 - 2026-06-17
+
+- Fixed copied tag links opening to "extension not found": the `vscode://` link
+  authority now uses the published extension id (`patrick1099.code-jump-tags`)
+  and is resolved from the running extension so it survives publisher renames.
+
 ## 0.1.0 - 2026-06-16
 
 Initial preview release of Code Jump Tags.
