@@ -144,10 +144,14 @@ export async function toggleEditMode(): Promise<void> {
   window.setStatusBarMessage("Code Jump Tags: 注释编辑模式已开启", 2000);
 }
 
-// `[note](vscode://patrick.code-jump-tags/goto?file=..&line=..&pattern=..)`
-// NB: the URI authority must be the extension id (publisher.name), which is
-// NOT the same as EXTENSION_NAME (the command prefix). Keep this literal.
-const EXTENSION_ID = "patrick.code-jump-tags";
+// `[note](vscode://patrick1099.code-jump-tags/goto?file=..&line=..&pattern=..)`
+// The URI authority MUST be the extension id (publisher.name), NOT EXTENSION_NAME
+// (the command prefix). It is filled in from the running extension at
+// registration (see registerLodestarCommands) so it always matches however the
+// extension is published; the literal is only a fallback for older VS Code
+// (< 1.74, where context.extension is unavailable) and must stay in sync with
+// package.json's publisher.name.
+let EXTENSION_ID = "patrick1099.code-jump-tags";
 function tagLinkMarkdown(args: {
   note?: string;
   file: string;
@@ -350,6 +354,13 @@ export async function newFolder() {
 }
 
 export function registerLodestarCommands(context: ExtensionContext) {
+  // Use the real published id (publisher.name) for tag links, so they keep
+  // working through any publisher rename. context.extension exists since VS Code
+  // 1.74; on older hosts we keep the literal fallback above.
+  const extId = (context as any).extension?.id;
+  if (typeof extId === "string" && extId.length > 0) {
+    EXTENSION_ID = extId;
+  }
   context.subscriptions.push(
     commands.registerCommand(
       `${EXTENSION_NAME}.goto`,
