@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Code Jump Tags · 新 UI 原型</title>
+<style>
+  :root {
+    /* VS Code Dark+ 主题取色 */
+    --bg:            #1e1e1e;
+    --bg-side:       #252526;
+    --bg-elev:       #2d2d30;
+    --bg-hover:      #2a2d2e;
+    --border:        #3c3c3c;
+    --fg:            #d4d4d4;
+    --fg-dim:        #858585;
+    --fg-faint:      #6a6a6a;
+    --accent:        #4ea1ff;   /* Code Jump Tags 主色:靛蓝 */
+    --accent-soft:   #1c3a5e;
+    --tag:           #f6e89a;   /* 标签黄(沿用 gutter 图标色感) */
+    --green:         #4ec98a;
+    --red:           #f06c6c;
+    --line-num:      #5a5a5a;
+    --kw:            #569cd6;
+    --fn:            #dcdcaa;
+    --str:           #ce9178;
+    --cmt:           #6a9955;
+    --typ:           #4ec9b0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.5 "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "Cascadia Code", "Consolas", monospace; }
+
+  /* ---------- 页面骨架 ---------- */
+  .page { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  h1 .brand { color: var(--accent); }
+  .sub { color: var(--fg-dim); margin: 0 0 24px; font-size: 13px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--fg-dim); margin: 36px 0 12px; font-weight: 600; }
+
+  .window {
+    display: grid; grid-template-columns: 300px 1fr;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,.45);
+    background: var(--bg);
+  }
+
+  /* ---------- 侧边栏(卡片式分组) ---------- */
+  .side { background: var(--bg-side); border-right: 1px solid var(--border);
+          display: flex; flex-direction: column; }
+  .side-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 12px 10px; border-bottom: 1px solid var(--border);
+  }
+  .side-head .logo {
+    width: 20px; height: 20px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--accent), #2b6fc2);
+    display: grid; place-items: center; color: #fff; font-size: 13px;
+  }
+  .side-head .ttl { font-weight: 600; font-size: 12px; letter-spacing: .03em; }
+  .side-head .grow { flex: 1; }
+  .icon-btn {
+    width: 24px; height: 24px; border-radius: 5px; border: none;
+    background: transparent; color: var(--fg-dim); cursor: pointer;
+    display: grid; place-items: center; font-size: 14px;
+  }
+  .icon-btn:hover { background: var(--bg-hover); color: var(--fg); }
+
+  .search {
+    margin: 10px 12px 4px; display: flex; align-items: center; gap: 6px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 8px; color: var(--fg-faint);
+  }
+  .search input {
+    border: none; background: transparent; color: var(--fg); flex: 1;
+    outline: none; font: inherit;
+  }
+
+  .groups { padding: 8px; overflow: auto; flex: 1; }
+
+  .group { margin-bottom: 8px; border-radius: 7px; background: var(--bg-elev);
+           border: 1px solid transparent; }
+  .group:hover { border-color: var(--border); }
+  .group-head {
+    display: flex; align-items: center; gap: 7px; padding: 8px 9px;
+    cursor: pointer; user-select: none;
+  }
+  .chev { color: var(--fg-dim); font-size: 10px; transition: transform .15s;
+          width: 10px; }
+  .group.collapsed .chev { transform: rotate(-90deg); }
+  .group.collapsed .tags { display: none; }
+  .folder-ico { color: var(--accent); font-size: 13px; }
+  .group-name { font-weight: 600; flex: 1; }
+  .count { color: var(--fg-faint); font-size: 11px;
+           background: var(--bg); padding: 1px 7px; border-radius: 9px; }
+  .group-actions { display: none; gap: 2px; }
+  .group:hover .group-actions { display: flex; }
+
+  .tags { padding: 2px 6px 8px; }
+  .tag-row {
+    display: flex; align-items: flex-start; gap: 8px; padding: 6px 7px;
+    border-radius: 6px; cursor: pointer; position: relative;
+  }
+  .tag-row:hover { background: var(--bg-hover); }
+  .tag-row .dot { width: 7px; height: 7px; border-radius: 50%;
+                  background: var(--tag); margin-top: 5px; flex: none;
+                  box-shadow: 0 0 0 3px rgba(246,232,154,.12); }
+  .tag-main { flex: 1; min-width: 0; }
+  .tag-note { color: var(--fg); white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; }
+  .tag-loc { color: var(--fg-faint); font-size: 11px; margin-top: 1px; }
+  .tag-loc .file { color: var(--accent); }
+  .tag-actions { display: none; gap: 2px; }
+  .tag-row:hover .tag-actions { display: flex; }
+
+  .side-foot {
+    border-top: 1px solid var(--border); padding: 8px 12px;
+    display: flex; align-items: center; gap: 8px; color: var(--fg-dim);
+    font-size: 12px;
+  }
+  .side-foot .grow { flex: 1; }
+  .pill-btn {
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg-dim);
+    border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 12px;
+    display: inline-flex; gap: 5px; align-items: center;
+  }
+  .pill-btn:hover { color: var(--fg); border-color: var(--accent); }
+
+  /* ---------- 编辑器区 ---------- */
+  .editor { background: var(--bg); position: relative; overflow: hidden; }
+  .tabbar { display: flex; background: var(--bg-side);
+            border-bottom: 1px solid var(--border); }
+  .tab { padding: 8px 16px; font-size: 12px; color: var(--fg-dim);
+         border-right: 1px solid var(--border); }
+  .tab.active { background: var(--bg); color: var(--fg);
+                border-top: 1px solid var(--accent); }
+  .code { padding: 10px 0; font-family: "Cascadia Code","Consolas",monospace;
+          font-size: 13px; line-height: 20px; }
+  .ln { display: flex; align-items: center; min-height: 20px; }
+  .ln .gutter { width: 50px; text-align: right; padding-right: 14px;
+                color: var(--line-num); flex: none; position: relative;
+                user-select: none; }
+  .ln .txt { white-space: pre; padding-left: 14px; }
+  .ln.marked .gutter::before {
+    content: "⌖"; position: absolute; left: 8px; color: var(--tag);
+    font-size: 13px;
+  }
+  .kw { color: var(--kw); } .fn { color: var(--fn); } .str { color: var(--str); }
+  .cmt { color: var(--cmt); } .typ { color: var(--typ); }
+
+  /* 注释 pill（行上方,替代 CodeLens 朴素文字） */
+  .note-pill-row { display: flex; }
+  .note-pill {
+    margin-left: 64px; margin-bottom: 1px;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: linear-gradient(90deg, rgba(78,161,255,.14), rgba(78,161,255,.04));
+    border: 1px solid rgba(78,161,255,.28); border-left: 2px solid var(--accent);
+    border-radius: 4px; padding: 1px 9px 1px 7px; font-size: 12px;
+    color: #cfe4ff; font-family: "Segoe UI", sans-serif; cursor: pointer;
+  }
+  .note-pill .cro { color: var(--tag); }
+  .note-pill:hover { background: rgba(78,161,255,.22); }
+
+  /* ---------- 自定义编辑浮层(替代 CodeTour 评论气泡) ---------- */
+  .popover {
+    position: absolute; width: 420px; left: 96px;
+    background: var(--bg-elev); border: 1px solid var(--accent);
+    border-radius: 8px; box-shadow: 0 10px 34px rgba(0,0,0,.55);
+    overflow: hidden; z-index: 5;
+  }
+  .pop-head {
+    display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+    background: var(--accent-soft); border-bottom: 1px solid var(--border);
+  }
+  .pop-head .ic { width: 18px; height: 18px; border-radius: 4px;
+    background: linear-gradient(135deg, var(--accent), #2b6fc2);
+    display: grid; place-items: center; color: #fff; font-size: 11px; }
+  .pop-head .t { font-weight: 600; font-size: 12px; flex: 1; }
+  .pop-head .loc { color: var(--fg-dim); font-size: 11px; }
+  .pop-body { padding: 10px 11px; }
+  .pop-body textarea {
+    width: 100%; min-height: 58px; resize: vertical; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--fg);
+    padding: 7px 9px; font: 13px/1.5 "Segoe UI", sans-serif; outline: none;
+  }
+  .pop-body textarea:focus { border-color: var(--accent); }
+  .pop-foot {
+    display: flex; align-items: center; gap: 8px; padding: 0 11px 11px;
+  }
+  .pop-foot .grow { flex: 1; }
+  .hint { color: var(--fg-faint); font-size: 11px; }
+  .btn {
+    border: none; border-radius: 6px; padding: 5px 13px; cursor: pointer;
+    font: 12px "Segoe UI"; display: inline-flex; gap: 5px; align-items: center;
+  }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #5aabff; }
+  .btn.ghost { background: transparent; color: var(--fg-dim);
+               border: 1px solid var(--border); }
+  .btn.ghost:hover { color: var(--fg); }
+  .btn.danger { background: transparent; color: var(--red); border: none; }
+  .btn.danger:hover { background: rgba(240,108,108,.12); }
+
+  /* ---------- 悬浮预览卡 ---------- */
+  .hovercard {
+    position: absolute; width: 320px; background: var(--bg-elev);
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0,0,0,.5);
+  }
+  .hc-bar { height: 3px; background: var(--tag); }
+  .hc-body { padding: 10px 12px; }
+  .hc-note { color: var(--fg); margin-bottom: 8px; }
+  .hc-actions { display: flex; gap: 14px; border-top: 1px solid var(--border);
+                padding-top: 8px; }
+  .hc-actions a { color: var(--accent); text-decoration: none; font-size: 12px;
+                  cursor: pointer; }
+  .hc-actions a.del { color: var(--red); }
+
+  /* ---------- 回收站面板 ---------- */
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+            margin-top: 14px; }
+  .panel { border: 1px solid var(--border); border-radius: 8px;
+           background: var(--bg-side); overflow: hidden; }
+  .panel-head { padding: 9px 12px; border-bottom: 1px solid var(--border);
+                font-weight: 600; font-size: 12px; display: flex; gap: 8px;
+                align-items: center; }
+  .panel-body { padding: 8px; }
+  .trash-grp { background: var(--bg-elev); border-radius: 6px; padding: 4px;
+               margin-bottom: 6px; }
+  .trash-grp .gh { display: flex; align-items: center; gap: 7px; padding: 5px 6px;
+                   font-weight: 600; }
+  .trash-grp .age { color: var(--fg-faint); font-size: 11px; margin-left: auto; }
+  .trash-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 24px; }
+  .trash-row:hover { background: var(--bg-hover); border-radius: 5px; }
+  .trash-row .restore { margin-left: auto; }
+  .check { width: 14px; height: 14px; border: 1px solid var(--fg-faint);
+           border-radius: 3px; flex: none; }
+  .check.on { background: var(--accent); border-color: var(--accent);
+              display: grid; place-items: center; color: #fff; font-size: 9px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 14px;
+            color: var(--fg-dim); font-size: 12px; }
+  .legend b { color: var(--fg); font-weight: 600; }
+  .note-block { margin-top: 28px; padding: 14px 16px; border-radius: 8px;
+                background: var(--bg-side); border: 1px solid var(--border);
+                color: var(--fg-dim); font-size: 12.5px; line-height: 1.7; }
+  .note-block b { color: var(--accent); }
+  code.k { background: var(--bg-elev); padding: 1px 6px; border-radius: 4px;
+           color: var(--tag); font-family: "Cascadia Code", monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1><span class="brand">⌖ Code Jump Tags</span> — 新 UI 原型</h1>
+  <p class="sub">脱离 CodeTour 评论气泡 / 树形外观,改用自有的卡片式列表 + 轻量编辑浮层。本文件可直接浏览器打开。</p>
+
+  <!-- ============ 主界面:侧栏 + 编辑器 ============ -->
+  <div class="window">
+
+    <!-- 侧边栏 -->
+    <aside class="side">
+      <div class="side-head">
+        <div class="logo">⌖</div>
+        <div class="ttl">CODE JUMP TAGS</div>
+        <div class="grow"></div>
+        <button class="icon-btn" title="新建文件夹">⊞</button>
+        <button class="icon-btn" title="折叠全部">⇲</button>
+        <button class="icon-btn" title="回收站">🗑</button>
+      </div>
+
+      <div class="search">
+        <span>⌕</span><input placeholder="搜索标签 / 文件…" />
+      </div>
+
+      <div class="groups">
+        <!-- 文件夹组 1 -->
+        <div class="group">
+          <div class="group-head">
+            <span class="chev">▾</span>
+            <span class="folder-ico">▣</span>
+            <span class="group-name">报警链路</span>
+            <span class="count">3</span>
+            <span class="group-actions">
+              <button class="icon-btn" title="复制全部链接">⧉</button>
+              <button class="icon-btn" title="重命名">✎</button>
+              <button class="icon-btn" title="删除文件夹">🗑</button>
+            </span>
+          </div>
+          <div class="tags">
+            <div class="tag-row">
+              <span class="dot"></span>
+              <span class="tag-main">
+                <div class="tag-note">阀门强关入口,先判 Enable 再下发</div>
+                <div class="tag-loc"><span class="file">ValManage.c</span> : 412</div>
+              </span>
+              <span class="tag-actions">
+                <button class="icon-btn" title="复制链接">⧉</button>
+                <button class="icon-btn" title="删除">🗑</button>
+              </span>
+            </div>
+            <div class="tag-row">
+              <span class="dot"></span>
+              <span class="tag-main">
+                <div class="tag-note">CSB 只回标志位,主控不自己判反流</div>
+                <div class="tag-loc"><span class="file">csb_deal.c</span> : 88</div>
+              </span>
+              <span class="tag-actions">
+                <button class="icon-btn" title="复制链接">⧉</button>
+                <button class="icon-btn" title="删除">🗑</button>
+              </span>
+            </div>
+            <div class="tag-row">
+              <span class="dot"></span>
+              <span class="tag-main">
+                <div class="tag-note">温压都是 ×100,main.h 注释写错了</div>
+                <div class="tag-loc"><span class="file">XinAo_Param.c</span> : 1203</div>
+              </span>
+              <span class="tag-actions">
+                <button class="icon-btn" title="复制链接">⧉</button>
+                <button class="icon-btn" title="删除">🗑</button>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 文件夹组 2(折叠) -->
+        <div class="group collapsed">
+          <div class="group-head">
+            <span class="chev">▾</span>
+            <span class="folder-ico">▣</span>
+            <span class="group-name">协议 v03 差异</span>
+            <span class="count">5</span>
+          </div>
+          <div class="tags"></div>
+        </div>
+
+        <!-- 未分组 -->
+        <div class="group">
+          <div class="group-head">
+            <span class="chev">▾</span>
+            <span class="folder-ico" style="color:var(--fg-faint)">▤</span>
+            <span class="group-name" style="color:var(--fg-dim)">未分组</span>
+            <span class="count">1</span>
+          </div>
+          <div class="tags">
+            <div class="tag-row">
+              <span class="dot"></span>
+              <span class="tag-main">
+                <div class="tag-note">这里 setTimeout 0 是为了让气泡先关掉</div>
+                <div class="tag-loc"><span class="file">commands.ts</span> : 57</div>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-foot">
+        <span>10 个标签 · 3 个文件夹</span>
+        <span class="grow"></span>
+        <button class="pill-btn" title="显示/隐藏行内标记">◑ 标记</button>
+      </div>
+    </aside>
+
+    <!-- 编辑器 -->
+    <section class="editor">
+      <div class="tabbar">
+        <div class="tab active">ValManage.c</div>
+        <div class="tab">csb_deal.c</div>
+      </div>
+
+      <div class="code">
+        <div class="ln"><span class="gutter">408</span><span class="txt"><span class="kw">void</span> <span class="fn">Valve_StrongClose</span>(<span class="kw">void</span>)</span></div>
+        <div class="ln"><span class="gutter">409</span><span class="txt">{</span></div>
+        <div class="ln"><span class="gutter">410</span><span class="txt">    <span class="kw">if</span> (MeterRun.ValEnable == <span class="typ">VAL_DISABLED</span>)</span></div>
+        <div class="ln"><span class="gutter">411</span><span class="txt">        <span class="kw">return</span>;</span></div>
+
+        <!-- 注释 pill(行上方) -->
+        <div class="note-pill-row">
+          <span class="note-pill"><span class="cro">⌖</span> 阀门强关入口,先判 Enable 再下发</span>
+        </div>
+        <div class="ln marked"><span class="gutter">412</span><span class="txt">    <span class="fn">Valve_Drive</span>(<span class="typ">CLOSE</span>);   <span class="cmt">// 我自己的注释不被挤</span></span></div>
+
+        <div class="ln"><span class="gutter">413</span><span class="txt">    State.bValClosed = <span class="typ">1</span>;</span></div>
+        <div class="ln"><span class="gutter">414</span><span class="txt">}</span></div>
+        <div class="ln"><span class="gutter">415</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">416</span><span class="txt"><span class="cmt">// —— 下面演示:在 420 行加标签,弹出编辑浮层 ——</span></span></div>
+        <div class="ln"><span class="gutter">417</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">418</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">419</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">420</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">421</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">422</span><span class="txt"></span></div>
+        <div class="ln"><span class="gutter">423</span><span class="txt"></span></div>
+      </div>
+
+      <!-- 自定义编辑浮层(替代 CodeTour 评论气泡) -->
+      <div class="popover" style="top: 150px;">
+        <div class="pop-head">
+          <span class="ic">⌖</span>
+          <span class="t">添加 / 编辑标签</span>
+          <span class="loc mono">ValManage.c : 420</span>
+        </div>
+        <div class="pop-body">
+          <textarea>低电压时禁止强关,避免阀卡半开</textarea>
+        </div>
+        <div class="pop-foot">
+          <span class="hint">⌘/Ctrl + Enter 保存 · Esc 取消</span>
+          <span class="grow"></span>
+          <button class="btn danger" title="删除此标签">🗑 删除</button>
+          <button class="btn ghost">取消</button>
+          <button class="btn primary">✓ 保存</button>
+        </div>
+      </div>
+
+      <!-- 悬浮预览卡(展示 hover 效果) -->
+      <div class="hovercard" style="top: 30px; right: 26px;">
+        <div class="hc-bar"></div>
+        <div class="hc-body">
+          <div class="hc-note">阀门强关入口,先判 Enable 再下发。<br/>Enable=0 时直接 return,不动阀。</div>
+          <div class="hc-actions">
+            <a>✎ 编辑</a>
+            <a>⧉ 复制链接</a>
+            <a class="del">🗑 删除</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 图例 -->
+  <div class="legend">
+    <span><b>⌖ pill</b> 行上方注释,不再占固定列、不挤你的代码注释</span>
+    <span><b>浮层</b> 点 gutter「+」即弹,只有输入框+保存/删除,无头像黑框</span>
+    <span><b>悬浮卡</b> 鼠标停在标签行 → 注释全文 + 编辑/复制/删除</span>
+  </div>
+
+  <!-- ============ 第二屏:回收站 + 删除确认 ============ -->
+  <h2>回收站(可展开,单独恢复文件夹里的某个标签)</h2>
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-head">🗑 回收站 <span style="color:var(--fg-faint);font-weight:400">· 最近删除</span></div>
+      <div class="panel-body">
+        <!-- 删掉的整个文件夹,可展开选里面的标签 -->
+        <div class="trash-grp">
+          <div class="gh">
+            <span class="chev">▾</span>
+            <span class="folder-ico">▣</span>
+            <span>报警链路（文件夹）</span>
+            <span class="age">2 小时前</span>
+          </div>
+          <div class="trash-row">
+            <span class="check on">✓</span>
+            <span>阀门强关入口,先判 Enable…</span>
+            <span class="restore"><button class="pill-btn">↩ 恢复</button></span>
+          </div>
+          <div class="trash-row">
+            <span class="check"></span>
+            <span>CSB 只回标志位,主控不自己判反流</span>
+            <span class="restore"><button class="pill-btn">↩ 恢复</button></span>
+          </div>
+        </div>
+        <!-- 删掉的单个标签 -->
+        <div class="trash-grp">
+          <div class="gh" style="padding-left:24px">
+            <span class="dot"></span>
+            <span>这里 setTimeout 0 是为了让气泡先关掉</span>
+            <span class="age">昨天</span>
+            <span class="restore" style="margin-left:8px"><button class="pill-btn">↩ 恢复</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认 -->
+    <div class="panel">
+      <div class="panel-head">删除确认(带「不再询问」)</div>
+      <div class="panel-body" style="padding:18px">
+        <div style="background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;padding:16px;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="font-size:18px">⚠️</span>
+            <div>
+              <div style="font-weight:600;margin-bottom:4px;">删除标签「阀门强关入口…」?</div>
+              <div style="color:var(--fg-dim);font-size:12px;">可在回收站恢复(保留最近 50 条)。</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn ghost">取消</button>
+            <button class="btn ghost">删除并不再询问</button>
+            <button class="btn primary" style="background:var(--red)">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block">
+    <b>这版改了什么 / 对应代码:</b><br/>
+    1. <b>编辑浮层替代评论气泡</b> — 现在的 <code class="k">editThread.ts</code>(CommentController)整块换成自绘浮层。技术选型:Webview 浮层 或 仍用 decoration+原生 InputBox。这是最大改动,需要你拍板。<br/>
+    2. <b>卡片式侧栏</b> — 现 TreeDataProvider 换成 Webview View,才能做圆角卡片/搜索框/hover 操作条。<br/>
+    3. <b>注释 pill</b> — 在 <code class="k">decorator.ts</code> 的 CodeLens 上加样式(CodeLens 样式能力有限,完整 pill 可能要改用 <code class="k">after</code> 装饰)。<br/>
+    4. 回收站/删除确认逻辑已存在(<code class="k">tree.ts</code> restoreSelection / <code class="k">commands.ts</code> confirmDelete),只是把 QuickPick 换成 Webview 展示。
+  </div>
+
+</div>
+</body>
+</html>
