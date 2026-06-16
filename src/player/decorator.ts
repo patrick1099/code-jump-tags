@@ -4,17 +4,16 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
-import { CodeTourStepTuple, store } from "../store";
+import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
 const DISABLED_SCHEMES = [FS_SCHEME_CONTENT, "comment"];
 
-// Where the tag note is rendered: "above" = a CodeLens on the line above
-// (CodeTour style), "end" = inline text at the end of the marked line.
-function getNotePosition(): "above" | "end" {
-  return vscode.workspace
-    .getConfiguration("codeJumpTags")
-    .get<"above" | "end">("notePosition", "above");
+// Per-tag note placement: "above" = a CodeLens on the line above (CodeTour
+// style, clickable), "end" = inline text at the end of the marked line. Stored
+// on each tag/step; unset means "above" (the default for new tags).
+function stepNotePosition(step: CodeTourStep): "above" | "end" {
+  return step.notePosition === "end" ? "end" : "above";
 }
 
 const TOUR_DECORATOR = vscode.window.createTextEditorDecorationType({
@@ -23,6 +22,13 @@ const TOUR_DECORATOR = vscode.window.createTextEditorDecorationType({
   overviewRulerColor: "rgb(246,232,154)",
   overviewRulerLane: vscode.OverviewRulerLane.Right,
   rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+});
+
+// Separate type for the end-of-line note. ClosedOpen lets the anchor range grow
+// at its end, so when you append code to the line the note keeps trailing AFTER
+// your code instead of staying at a fixed column and getting overrun.
+const INLINE_NOTE_DECORATOR = vscode.window.createTextEditorDecorationType({
+  rangeBehavior: vscode.DecorationRangeBehavior.ClosedOpen
 });
 
 // Resolve every tag/step that lands in `document`, returning [tour, step,
@@ -69,51 +75,68 @@ export async function updateDecorations(
     return;
   }
 
+  if (!store.showMarkers) {
+    return clearDecorations(editor);
+  }
+
   store.activeEditorSteps = await getTourSteps(editor.document);
   if (store.activeEditorSteps.length === 0) {
     return clearDecorations(editor);
   }
 
-  // Gutter icon on the marked line + the full note as a hoverMessage (so
-  // hovering anywhere on the line shows it). The note text is rendered either
+  // Gutter icon + full-note hover on every marked line. Each note renders either
   // ABOVE the line as a CodeLens (see TagCodeLensProvider) or inline at the end
-  // of the line, per the codeJumpTags.notePosition setting.
-  const inline = getNotePosition() === "end";
-  const decorations: vscode.DecorationOptions[] = store.activeEditorSteps!.map(
-    ([, step, , line]) => {
-      const full = (step.description || "").trim();
-      const note = full.split(/\r?\n/)[0];
-      const hover = new vscode.MarkdownString(full);
-      hover.isTrusted = true;
-      // Make the hover offer a re-edit link (works in both note positions).
-      if (step.id) {
-        const args = encodeURIComponent(JSON.stringify([step.id]));
-        hover.appendMarkdown(
-          `${full ? "\n\n" : ""}[✎ 编辑注释](command:codeJumpTags.editNote?${args})`
-        );
-      }
-      return {
-        range: new vscode.Range(line!, 0, line!, 1000),
-        hoverMessage: full ? hover : undefined,
-        renderOptions:
-          inline && note
-            ? {
-                after: {
-                  contentText: `    ${note}`,
-                  color: new vscode.ThemeColor("editorCodeLens.foreground"),
-                  fontStyle: "italic"
-                }
-              }
-            : undefined
-      };
+  // of the line, per that tag's own notePosition (default "above").
+  const gutterDecorations: vscode.DecorationOptions[] = [];
+  const inlineDecorations: vscode.DecorationOptions[] = [];
+
+  for (const [, step, , line] of store.activeEditorSteps!) {
+    if (line === undefined || line === null || line >= editor.document.lineCount) {
+      continue;
     }
-  );
-  editor.setDecorations(TOUR_DECORATOR, decorations);
+    const full = (step.description || "").trim();
+    const note = full.split(/\r?\n/)[0];
+    const hover = new vscode.MarkdownString(full);
+    hover.isTrusted = true;
+    // Make the hover offer a re-edit link (works in both note positions).
+    if (step.id) {
+      const args = encodeURIComponent(JSON.stringify([step.id]));
+      hover.appendMarkdown(
+        `${full ? "\n\n" : ""}[✎ 编辑注释](command:codeJumpTags.editNote?${args})`
+      );
+    }
+
+    // Gutter icon + whole-line hover live on the wide ClosedClosed range.
+    gutterDecorations.push({
+      range: new vscode.Range(line, 0, line, 1000),
+      hoverMessage: full ? hover : undefined
+    });
+
+    // End-of-line note is a separate ClosedOpen decoration anchored at the
+    // line's true end, so it always trails the code as the line grows.
+    if (stepNotePosition(step) === "end" && note) {
+      const endCol = editor.document.lineAt(line).text.length;
+      inlineDecorations.push({
+        range: new vscode.Range(line, endCol, line, endCol),
+        renderOptions: {
+          after: {
+            contentText: `    ${note}`,
+            color: new vscode.ThemeColor("editorCodeLens.foreground"),
+            fontStyle: "italic"
+          }
+        }
+      });
+    }
+  }
+
+  editor.setDecorations(TOUR_DECORATOR, gutterDecorations);
+  editor.setDecorations(INLINE_NOTE_DECORATOR, inlineDecorations);
 }
 
 function clearDecorations(editor: vscode.TextEditor) {
   store.activeEditorSteps = undefined;
   editor.setDecorations(TOUR_DECORATOR, []);
+  editor.setDecorations(INLINE_NOTE_DECORATOR, []);
 }
 
 // CodeLens shown on the line ABOVE each marked line, displaying the tag note
@@ -125,17 +148,18 @@ class TagCodeLensProvider implements vscode.CodeLensProvider {
   async provideCodeLenses(
     document: vscode.TextDocument
   ): Promise<vscode.CodeLens[]> {
-    if (
-      !store.showMarkers ||
-      getNotePosition() !== "above" ||
-      DISABLED_SCHEMES.includes(document.uri.scheme)
-    ) {
+    if (!store.showMarkers || DISABLED_SCHEMES.includes(document.uri.scheme)) {
       return [];
     }
 
     const steps = await getTourSteps(document);
     return steps
-      .filter(([, , , line]) => line !== undefined && line !== null)
+      .filter(
+        ([, step, , line]) =>
+          line !== undefined &&
+          line !== null &&
+          stepNotePosition(step) === "above"
+      )
       .map(([, step, , line]) => {
         const note = (step.description || "").split(/\r?\n/)[0].trim();
         // Clicking the lens re-edits the tag's note (CodeTour-like).
@@ -148,56 +172,28 @@ class TagCodeLensProvider implements vscode.CodeLensProvider {
   }
 }
 
-let disposables: vscode.Disposable[] = [];
 export async function registerDecorators() {
   vscode.languages.registerCodeLensProvider("*", new TagCodeLensProvider());
 
-  // Switching note position (above CodeLens <-> inline end-of-line) re-renders
-  // both the CodeLenses and the active editor's decorations.
-  vscode.workspace.onDidChangeConfiguration(e => {
-    if (e.affectsConfiguration("codeJumpTags.notePosition")) {
-      onDidChangeCodeLenses.fire();
-      if (vscode.window.activeTextEditor) {
-        updateDecorations(vscode.window.activeTextEditor);
-      }
+  // Render markers as soon as an editor becomes active (e.g. opening a file), so
+  // a tagged line shows its ⌖ gutter marker immediately — not only after some
+  // later interaction. updateDecorations self-gates on store.showMarkers.
+  vscode.window.onDidChangeActiveTextEditor(editor => {
+    if (editor) {
+      updateDecorations(editor);
+    }
+  });
+  vscode.window.onDidChangeVisibleTextEditors(() => {
+    if (vscode.window.activeTextEditor) {
+      updateDecorations(vscode.window.activeTextEditor);
     }
   });
 
+  // Re-render whenever tags change (added / edited / removed / repositioned) or
+  // marker visibility toggles. saveStore() rebuilds store.tours, so toggling a
+  // single tag's note position flows through here and moves it live.
   reaction(
-    () => [
-      store.showMarkers,
-      store.tours.map(tour => [tour.title, tour.steps])
-    ],
-    () => {
-      const activeEditor = vscode.window.activeTextEditor;
-
-      // Refresh the above-line note labels whenever tags or visibility change.
-      onDidChangeCodeLenses.fire();
-
-      if (store.showMarkers) {
-        disposables.push(
-          vscode.window.onDidChangeActiveTextEditor(editor => {
-            if (editor) {
-              updateDecorations(editor);
-            }
-          })
-        );
-
-        if (activeEditor) {
-          updateDecorations(activeEditor);
-        }
-      } else if (activeEditor) {
-        clearDecorations(activeEditor);
-
-        disposables.forEach(disposable => disposable.dispose());
-        disposables = [];
-      }
-    }
-  );
-
-  // Code Jump Tags: keep markers on, and refresh the active editor whenever tours change.
-  reaction(
-    () => store.tours.map(tour => tour.steps.length),
+    () => [store.showMarkers, store.tours.map(tour => [tour.title, tour.steps])],
     () => {
       onDidChangeCodeLenses.fire();
       if (vscode.window.activeTextEditor) {
@@ -215,4 +211,9 @@ export async function registerDecorators() {
     "codeJumpTags:showingMarkers",
     store.showMarkers
   );
+
+  // Initial paint for the editor already open on startup.
+  if (vscode.window.activeTextEditor) {
+    updateDecorations(vscode.window.activeTextEditor);
+  }
 }

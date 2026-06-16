@@ -48,19 +48,6 @@
           "default": true,
           "description": "Specifies whether or not to show tag markers in the editor gutter."
         },
-        "codeJumpTags.notePosition": {
-          "type": "string",
-          "enum": [
-            "above",
-            "end"
-          ],
-          "enumDescriptions": [
-            "在标记行上方用 CodeLens 显示注释(CodeTour 风格,会多占一行)",
-            "在标记行行尾内联显示注释(紧凑,但可能挤动行尾代码注释)"
-          ],
-          "default": "above",
-          "description": "Where to show tag note text: above the marked line with CodeLens, or inline at the end of the line."
-        },
         "codeJumpTags.confirmDelete": {
           "type": "boolean",
           "default": true,
@@ -160,6 +147,18 @@
         "icon": "$(trash)"
       },
       {
+        "command": "codeJumpTags.notePositionAbove",
+        "title": "注释显示在行上方(点击切到行尾)",
+        "category": "Code Jump Tags",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codeJumpTags.notePositionEnd",
+        "title": "注释显示在行尾(点击切到行上方)",
+        "category": "Code Jump Tags",
+        "icon": "$(arrow-right)"
+      },
+      {
         "command": "codeJumpTags.restoreFromTrash",
         "title": "从回收站恢复",
         "category": "Code Jump Tags",
@@ -215,6 +214,14 @@
         {
           "command": "codeJumpTags.deleteFromEditor",
           "when": "false"
+        },
+        {
+          "command": "codeJumpTags.notePositionAbove",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.notePositionEnd",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [
@@ -225,6 +232,16 @@
         }
       ],
       "comments/commentThread/title": [
+        {
+          "command": "codeJumpTags.notePositionAbove",
+          "group": "inline@0",
+          "when": "commentController == codeJumpTags-edit && codeJumpTags:notePosition == above"
+        },
+        {
+          "command": "codeJumpTags.notePositionEnd",
+          "group": "inline@0",
+          "when": "commentController == codeJumpTags-edit && codeJumpTags:notePosition == end"
+        },
         {
           "command": "codeJumpTags.deleteFromEditor",
           "group": "inline@1",

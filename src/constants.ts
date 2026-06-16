@@ -22,6 +22,17 @@ export const ICON_URL =
 export const SMALL_ICON_URL =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0MCcgaGVpZ2h0PSc0MCcgdmlld0JveD0nMCAwIDQwIDQwJz48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9J2cnIHgxPScwJyB5MT0nMCcgeDI9JzEnIHkyPScxJz48c3RvcCBvZmZzZXQ9JzAnIHN0b3AtY29sb3I9JyM0ZWExZmYnLz48c3RvcCBvZmZzZXQ9JzEnIHN0b3AtY29sb3I9JyMyYjZmYzInLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0nNDAnIGhlaWdodD0nNDAnIHJ4PScxMCcgZmlsbD0ndXJsKCNnKScvPjxnIGZpbGw9J25vbmUnIHN0cm9rZT0nI2ZmZicgc3Ryb2tlLXdpZHRoPScyLjInIHN0cm9rZS1saW5lY2FwPSdyb3VuZCc+PGNpcmNsZSBjeD0nMjAnIGN5PScyMCcgcj0nNy41Jy8+PHBhdGggZD0nTTIwIDV2NU0yMCAzMHY1TTUgMjBoNU0zMCAyMGg1Jy8+PC9nPjxjaXJjbGUgY3g9JzIwJyBjeT0nMjAnIHI9JzIuNicgZmlsbD0nI2ZmZicvPjwvc3ZnPg==";
 
+// A fully transparent avatar so the preview note comment shows no icon (omitting
+// iconPath would render a black square instead).
+export const BLANK_ICON_URL =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0MCcgaGVpZ2h0PSc0MCcgdmlld0JveD0nMCAwIDQwIDQwJy8+";
+
+// Shared text for the comment input box, so the "+" (create) box and the note
+// (edit) box read identically instead of VS Code's default "开始讨论". `prompt`
+// shows on the collapsed input; `placeHolder` shows once it's focused.
+export const NOTE_INPUT_PROMPT = "注释";
+export const NOTE_INPUT_PLACEHOLDER = "输入注释内容…";
+
 export const VSCODE_DIRECTORY = ".vscode";
 
 export const STORE_DIRECTORY = ".code-jump-tags";

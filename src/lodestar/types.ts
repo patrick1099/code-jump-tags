@@ -9,6 +9,7 @@ export interface TagNode {
   pattern?: string;    // line-content regex for drift recovery
   ref?: string | null; // reserved: pin to a commit/branch later
   createdAt: string;   // ISO timestamp
+  notePosition?: "above" | "end"; // per-tag note placement; unset => "above"
 }
 
 export interface FolderNode {

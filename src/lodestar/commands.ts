@@ -17,10 +17,12 @@ import { store as runtime } from "../store";
 import { endCurrentCodeTour, startCodeTour } from "../store/actions";
 import { LOOSE_TOUR_ID } from "./adapter";
 import {
+  closeTagEditor,
   openTagEditor,
   saveTagEdit,
   cancelTagEdit,
-  deleteFromEditor
+  deleteFromEditor,
+  toggleNotePosition
 } from "./editThread";
 import { getStore, saveStore } from "./persistence";
 import { resolveLine } from "./relocate";
@@ -254,6 +256,9 @@ export async function deleteFolder(node: any) {
 
   removeToTrash(store, folderId);
   await saveStore();
+  // A deleted folder takes its child tags with it; close any open edit bubble so
+  // it doesn't outlive the tag it was editing.
+  closeTagEditor();
 }
 
 // Restore one or more deleted tags/folders from the recycle bin back to the
@@ -374,6 +379,14 @@ export function registerLodestarCommands(context: ExtensionContext) {
     commands.registerCommand(
       `${EXTENSION_NAME}.deleteFromEditor`,
       deleteFromEditor
+    ),
+    commands.registerCommand(
+      `${EXTENSION_NAME}.notePositionAbove`,
+      toggleNotePosition
+    ),
+    commands.registerCommand(
+      `${EXTENSION_NAME}.notePositionEnd`,
+      toggleNotePosition
     ),
     commands.registerCommand(`${EXTENSION_NAME}.deleteFolder`, deleteFolder),
     commands.registerCommand(
