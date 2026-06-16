@@ -21,7 +21,11 @@ import {
   window,
   workspace
 } from "vscode";
-import { SMALL_ICON_URL } from "../constants";
+import {
+  NOTE_INPUT_PLACEHOLDER,
+  NOTE_INPUT_PROMPT,
+  SMALL_ICON_URL
+} from "../constants";
 import { CodeTour, store } from "../store";
 import { initializeStorage } from "../store/storage";
 import {
@@ -34,7 +38,7 @@ import {
 } from "../utils";
 import { registerCodeStatusModule } from "./codeStatus";
 import { registerPlayerCommands } from "./commands";
-import { registerDecorators } from "./decorator";
+import { getTourSteps, registerDecorators } from "./decorator";
 import { registerFileSystemProvider } from "./fileSystem";
 import { registerTextDocumentContentProvider } from "./fileSystem/documentProvider";
 import { registerStatusBar } from "./status";
@@ -140,27 +144,83 @@ export async function focusPlayer() {
   showDocument(currentThread.uri, currentThread.range);
 }
 
+// Commenting-range provider for the gutter "+". While editing
+// (store.isRecording) we offer the "+" on every line EXCEPT lines that already
+// carry a tag. Reason: VS Code's native "+" always opens an EMPTY reply box and
+// can't be pre-filled or intercepted, so on a tagged line it would force an
+// "empty box → submit → real editor" detour. By withholding the "+" there, a
+// tagged line is edited directly by clicking its note (the CodeLens above the
+// line), with no empty box. Untagged lines still get the "+" to add a new tag.
+//
+// Note: VS Code queries this once per opened document and caches the result, so
+// a line tagged DURING this session keeps its "+" until the file is reopened
+// (refreshCommentingRanges tries to bust that cache; addTourStep also routes a
+// click on such a lingering "+" to the existing note so it's never destructive).
+function makeCommentingRangeProvider() {
+  return {
+    provideCommentingRanges: async (document: TextDocument) => {
+      if (!store.isRecording) {
+        return null;
+      }
+      const tagged = new Set<number>(
+        (await getTourSteps(document))
+          .map(([, , , line]) => line)
+          .filter((l): l is number => l !== undefined && l !== null)
+      );
+      // Build ranges over the runs of UNtagged lines. A commenting range's end
+      // line is INCLUSIVE, so a run that stops before tagged line `i` must end at
+      // `i - 1` — ending it at `i` would still expose the "+" on the tagged line.
+      const ranges: Range[] = [];
+      let start = 0; // first line of the current untagged run
+      for (let i = 0; i <= document.lineCount; i++) {
+        if (i === document.lineCount || tagged.has(i)) {
+          if (i - 1 >= start) {
+            ranges.push(new Range(start, 0, i - 1, 0));
+          }
+          start = i + 1;
+        }
+      }
+      return ranges;
+    }
+  };
+}
+
+// Best-effort cache-bust for the gutter "+". The commenting API has no
+// "ranges changed" event and caches ranges per open document, so a freshly
+// tagged line keeps its "+" until reopen. Disposing+recreating the controller
+// (the same path that makes the "+" appear) asks VS Code to re-query. Done only
+// while editing — that's the only time the "+" shows, and the ambient edit tour
+// has zero steps so the controller holds no live thread to lose. If VS Code
+// still ignores the re-query, addTourStep keeps the lingering "+" harmless.
+// Create the player's comment controller with the shared input-box text, so the
+// "+" (create) box reads the same as the note (edit) box — not VS Code's default
+// "开始讨论" — and wire up the gutter "+" range provider.
+function createPlayerController(): CommentController {
+  const c = comments.createCommentController(CONTROLLER_ID, CONTROLLER_LABEL);
+  c.options = {
+    prompt: NOTE_INPUT_PROMPT,
+    placeHolder: NOTE_INPUT_PLACEHOLDER
+  };
+  c.commentingRangeProvider = makeCommentingRangeProvider();
+  return c;
+}
+
+export function refreshCommentingRanges() {
+  if (!controller || !store.isRecording) {
+    return;
+  }
+  controller.dispose();
+  controller = createPlayerController();
+}
+
 export async function startPlayer() {
   if (controller) {
     controller.dispose();
   }
 
-  controller = comments.createCommentController(
-    CONTROLLER_ID,
-    CONTROLLER_LABEL
-  );
-
   // TODO: Correctly limit the commenting ranges
   // to files within the workspace root
-  controller.commentingRangeProvider = {
-    provideCommentingRanges: (document: TextDocument) => {
-      if (store.isRecording) {
-        return [new Range(0, 0, document.lineCount, 0)];
-      } else {
-        return null;
-      }
-    }
-  };
+  controller = createPlayerController();
 }
 
 export async function stopPlayer() {
@@ -443,6 +503,13 @@ export function registerPlayerModule(context: ExtensionContext) {
   registerCodeStatusModule();
 
   initializeStorage(context);
+
+  // When a tag is added/removed, try to refresh the gutter "+" ranges so a newly
+  // tagged line drops its "+" without waiting for the file to be reopened.
+  reaction(
+    () => store.tours.map(tour => tour.steps.length).join(","),
+    () => refreshCommentingRanges()
+  );
 
   // Watch for changes to the active tour property,
   // and automatically re-render the current step in response.

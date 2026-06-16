@@ -35,6 +35,7 @@ export interface CodeTourStep {
 
   pattern?: string;
   markerTitle?: string;
+  notePosition?: "above" | "end"; // Code Jump Tags: per-tag note placement
 }
 
 export interface CodeTour {

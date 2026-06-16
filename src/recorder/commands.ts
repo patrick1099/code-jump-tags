@@ -403,18 +403,23 @@ export function registerRecorderCommands() {
           }
         }, 0);
 
-      // One tag per line: if this line is already tagged, don't overwrite.
-      // Re-open the edit bubble prefilled with the existing note (plus whatever
-      // was just typed), so the user modifies from the original instead of
-      // replacing it blindly.
+      // One tag per line, ONE box per line. If the line is already tagged,
+      // clicking "+" routes to the same edit box as clicking the note. The edit
+      // box shows the current note in its header and replaces it with what you
+      // type, so we discard the "+" box text and just open it. The one exception
+      // is a tag with no note yet: there's nothing to preserve, so adopt whatever
+      // was just typed as its first note without opening the editor.
       const existing = findTagByLocation(getStore(), file, line);
       if (existing) {
-        const seed = reply.text
-          ? `${existing.note}\n${reply.text}`
-          : existing.note;
         dismiss();
-        const { openTagEditor } = await import("../lodestar/editThread");
-        await openTagEditor(existing.id, seed);
+        const hasNote = existing.note && existing.note.trim().length > 0;
+        if (!hasNote && reply.text && reply.text.trim().length > 0) {
+          existing.note = reply.text;
+          await saveStore();
+        } else {
+          const { openTagEditor } = await import("../lodestar/editThread");
+          await openTagEditor(existing.id);
+        }
         return;
       }
 
@@ -791,6 +796,10 @@ export function registerRecorderCommands() {
         }
         removeToTrash(getStore(), step.id!);
         await saveStore();
+        // Drop the tag's open edit bubble, if any, so it doesn't linger after
+        // the tag it belonged to is gone.
+        const { closeTagEditor } = await import("../lodestar/editThread");
+        closeTagEditor(step.id!);
         return;
       }
 
