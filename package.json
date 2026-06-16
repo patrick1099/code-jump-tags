@@ -370,21 +370,7 @@
           "when": "workspaceFolderCount != 0 || codeJumpTags:inTour"
         }
       ]
-    },
-    "jsonValidation": [
-      {
-        "fileMatch": "*.tour",
-        "url": "./schema.json"
-      }
-    ],
-    "languages": [
-      {
-        "id": "json",
-        "extensions": [
-          ".tour"
-        ]
-      }
-    ]
+    }
   },
   "dependencies": {
     "@types/jexl": "^2.2.0",
