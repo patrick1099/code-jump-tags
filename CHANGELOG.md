@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.3.0 - 2026-06-17
+
+- Folders now behave like a file system: drag a folder (or tag) anywhere — into
+  another folder, or onto empty space to move it back to the root. Dropping a
+  folder into its own subtree is rejected.
+- The folder right-click command is now just 「新建文件夹」 (was 「新建子文件夹」),
+  matching how a file explorer reads — it creates a folder inside the one you
+  clicked.
+- Fixed: tags inside a nested sub-folder now show their gutter marker, CodeLens
+  note, and hover. Previously the editor decorations only covered top-level
+  folders, so tags moved into sub-folders lost their markers.
+
 ## 0.2.0 - 2026-06-17
 
 - Folders can now be nested to any depth. Right-click a folder and choose

@@ -35,8 +35,18 @@ class CodeTourTreeProvider
     source: TreeItem[],
     data: DataTransfer
   ): Promise<void> {
+    // Tags carry their tag id; folders carry their folder id (parsed out of the
+    // derived tour id). The synthetic "(未分组)" group isn't a real folder, so
+    // it isn't draggable.
     const ids = source
-      .map(s => (s instanceof CodeTourStepNode ? s.step?.id : undefined))
+      .map(s => {
+        if (s instanceof CodeTourStepNode) return s.step?.id;
+        if (s instanceof CodeTourNode) {
+          const folderId = s.tour.id.split("::").pop();
+          return folderId && folderId !== "__loose__" ? folderId : undefined;
+        }
+        return undefined;
+      })
       .filter(Boolean);
     data.set(LODESTAR_MIME, new DataTransferItem(ids));
   }
@@ -49,9 +59,12 @@ class CodeTourTreeProvider
     if (!item) return;
     const ids: string[] = item.value;
     const { getStore, saveStore } = await import("../../lodestar/persistence");
-    const { moveNode, findNode } = await import("../../lodestar/tree");
+    const { moveNode, findNode, isSelfOrDescendant } = await import(
+      "../../lodestar/tree"
+    );
     const store = getStore();
 
+    // No target == dropped on empty space == move to the root.
     let toParentId: string | null = null;
     let index = Number.MAX_SAFE_INTEGER;
     if (target instanceof CodeTourNode) {
@@ -64,7 +77,12 @@ class CodeTourTreeProvider
         index = found.index;
       }
     }
-    for (const id of ids) moveNode(store, id, toParentId, index);
+    for (const id of ids) {
+      // Never drop a folder into itself or one of its own descendants — that
+      // would orphan the moved subtree.
+      if (toParentId && isSelfOrDescendant(store, id, toParentId)) continue;
+      moveNode(store, id, toParentId, index);
+    }
     await saveStore();
   }
 

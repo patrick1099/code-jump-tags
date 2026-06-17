@@ -174,3 +174,29 @@ describe("reorder via moveNode (up/down semantics)", () => {
     expect(s.tree.map(n => n.id)).toEqual(["1", "3", "2"]);
   });
 });
+
+import { isSelfOrDescendant } from "../../src/lodestar/tree";
+
+describe("isSelfOrDescendant (folder-drag guard)", () => {
+  // root → f1 → f2 → (tag "1")
+  function nested() {
+    const s = createEmptyStore();
+    createFolder(s, "f1", () => "f1");
+    createFolder(s, "f2", () => "f2", "f1");
+    addTag(s, tag("1"), "f2");
+    return s;
+  }
+
+  it("a folder is its own self/descendant", () => {
+    expect(isSelfOrDescendant(nested(), "f1", "f1")).toBe(true);
+  });
+  it("a nested folder is a descendant of its ancestor", () => {
+    expect(isSelfOrDescendant(nested(), "f1", "f2")).toBe(true);
+  });
+  it("a deep tag is a descendant of the outer folder", () => {
+    expect(isSelfOrDescendant(nested(), "f1", "1")).toBe(true);
+  });
+  it("an ancestor is NOT a descendant of its own child", () => {
+    expect(isSelfOrDescendant(nested(), "f2", "f1")).toBe(false);
+  });
+});
