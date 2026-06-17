@@ -113,8 +113,10 @@ export class CodeTourStepNode extends TreeItem {
       this.tooltip = step.uri;
     }
 
-    // Code Jump Tags: expose tag fields for the copy-link command argument
+    // Code Jump Tags: expose tag fields for the copy-link command argument.
+    // `id` lets the rename command locate the tag in the store.
     (this as any).tagLink = {
+      id: step.id,
       note: step.description,
       file: step.file,
       line: step.line,
