@@ -374,12 +374,36 @@ export async function restoreFromTrash() {
   window.setStatusBarMessage(`Code Jump Tags: 已恢复 ${picked.length} 项`, 2000);
 }
 
+const folderIdGen = () =>
+  `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
 export async function newFolder() {
   const title = await window.showInputBox({ prompt: "文件夹名称" });
   if (!title) return;
-  createFolder(getStore(), title, () =>
-    `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-  );
+  createFolder(getStore(), title, folderIdGen);
+  await saveStore();
+}
+
+// Create a sub-folder inside the right-clicked folder. The synthetic "(未分组)"
+// group isn't a real folder, so it can't hold sub-folders. Folders nest to any
+// depth; the tree renders the nesting and findNode/moveNode already recurse.
+export async function newSubfolder(node: any) {
+  const tourId: string | undefined = node?.tour?.id;
+  const folderId = tourId ? tourId.split("::").pop() : undefined;
+  if (!folderId || folderId === LOOSE_TOUR_ID) {
+    window.showInformationMessage(
+      "Code Jump Tags:「(未分组)」里不能新建子文件夹"
+    );
+    return;
+  }
+  const found = findNode(getStore(), folderId);
+  if (!found || found.node.type !== "folder") {
+    window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
+    return;
+  }
+  const title = await window.showInputBox({ prompt: "子文件夹名称" });
+  if (!title || !title.trim()) return;
+  createFolder(getStore(), title.trim(), folderIdGen, folderId);
   await saveStore();
 }
 
@@ -435,6 +459,7 @@ export function registerLodestarCommands(context: ExtensionContext) {
       `${EXTENSION_NAME}.restoreFromTrash`,
       restoreFromTrash
     ),
-    commands.registerCommand(`${EXTENSION_NAME}.newFolder`, newFolder)
+    commands.registerCommand(`${EXTENSION_NAME}.newFolder`, newFolder),
+    commands.registerCommand(`${EXTENSION_NAME}.newSubfolder`, newSubfolder)
   );
 }

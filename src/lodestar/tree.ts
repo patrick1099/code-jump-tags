@@ -82,13 +82,17 @@ export function addTag(store: LodestarStore, tag: TagNode, parentId?: string): v
   childrenOf(store, parentId).push(tag);
 }
 
+// Create a folder. With no parentId it lands at the root; with a parentId it is
+// nested inside that folder (the tree supports arbitrary depth). If the parent
+// can't be found / isn't a folder, childrenOf falls back to the root.
 export function createFolder(
   store: LodestarStore,
   title: string,
-  idGen: () => string
+  idGen: () => string,
+  parentId?: string
 ): FolderNode {
   const folder: FolderNode = { type: "folder", id: idGen(), title, children: [] };
-  store.tree.push(folder);
+  childrenOf(store, parentId).push(folder);
   return folder;
 }
 

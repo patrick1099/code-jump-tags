@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.2.0 - 2026-06-17
+
+- Folders can now be nested to any depth. Right-click a folder and choose
+  「新建子文件夹」 to create a sub-folder inside it; the tree renders the nesting.
+  Sub-folders are purely for organizing — expand/collapse only, no tour playback.
+- Renaming, deleting, copying a folder's links, and reordering tags up/down all
+  work the same inside nested folders.
+
 ## 0.1.4 - 2026-06-17
 
 - Tags can now be renamed straight from the tree: right-click a tag and choose
