@@ -37,6 +37,24 @@ describe("mutations", () => {
     expect(findNode(s, "1")!.parent!.id).toBe("f1");
   });
 
+  it("createFolder nests a sub-folder under a parent folder", () => {
+    const s = createEmptyStore();
+    createFolder(s, "外层", () => "f1");
+    const sub = createFolder(s, "内层", () => "f2", "f1");
+    // sub-folder lives inside f1, not at the root
+    expect(s.tree).toHaveLength(1);
+    expect((findNode(s, "f1")!.node as any).children).toHaveLength(1);
+    expect(findNode(s, "f2")!.parent!.id).toBe("f1");
+    addTag(s, tag("1"), sub.id);
+    expect(findNode(s, "1")!.parent!.id).toBe("f2");
+  });
+
+  it("createFolder with an unknown parentId falls back to root", () => {
+    const s = createEmptyStore();
+    createFolder(s, "孤儿", () => "f9", "nope");
+    expect(s.tree.map(n => n.id)).toEqual(["f9"]);
+  });
+
   it("removeNode removes a tag", () => {
     const s = createEmptyStore();
     addTag(s, tag("1"));

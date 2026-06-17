@@ -124,34 +124,85 @@ class CodeTourTreeProvider
         return tours;
       }
     } else if (element instanceof CodeTourNode) {
-      if (element.tour.steps.length === 0) {
-        let item;
+      // Code Jump Tags: a folder expands to its nested sub-folders first, then
+      // its own direct tags as step nodes. Sub-folders come from the raw tree;
+      // each is wrapped in a CodeTourNode whose derived tour holds that folder's
+      // direct tags (so it expands the same way, to any depth).
+      const subfolderNodes = await this.subfolderNodesOf(element);
 
-        if (store.isRecording && store.activeTour?.tour.id == element.tour.id) {
-          item = new TreeItem("Add tour step...");
+      let stepNodes: TreeItem[];
+      if (element.tour.steps.length === 0) {
+        if (subfolderNodes.length > 0) {
+          // Folder holds only sub-folders — no "No steps recorded" placeholder.
+          stepNodes = [];
+        } else if (
+          store.isRecording &&
+          store.activeTour?.tour.id == element.tour.id
+        ) {
+          const item = new TreeItem("Add tour step...");
           item.command = {
             command: "codeJumpTags.addContentStep",
             title: "Add tour step..."
           };
+          stepNodes = [item];
         } else {
-          item = new TreeItem("No steps recorded");
+          stepNodes = [new TreeItem("No steps recorded")];
         }
-
-        return [item];
       } else {
-        return element.tour.steps.map(
+        stepNodes = element.tour.steps.map(
           (_, index) => new CodeTourStepNode(element.tour, index)
         );
       }
+
+      return [...subfolderNodes, ...stepNodes];
     }
+  }
+
+  // Build CodeTourNodes for the direct sub-folders of the folder behind `node`.
+  // Returns [] for the synthetic "(未分组)" group or any leaf folder. Uses
+  // dynamic imports to avoid a load-time cycle with the lodestar layer.
+  private async subfolderNodesOf(node: CodeTourNode): Promise<TreeItem[]> {
+    const folderId = node.tour.id.split("::").pop();
+    if (!folderId || folderId === "__loose__") return [];
+    const { getStore, getWorkspaceId } = await import(
+      "../../lodestar/persistence"
+    );
+    const { findNode } = await import("../../lodestar/tree");
+    const { folderToTour } = await import("../../lodestar/adapter");
+    const found = findNode(getStore(), folderId);
+    if (!found || found.node.type !== "folder") return [];
+    const wsId = getWorkspaceId();
+    return found.node.children
+      .filter((c): c is typeof c & { type: "folder" } => c.type === "folder")
+      .map(
+        child => new CodeTourNode(folderToTour(child, wsId), this.extensionPath)
+      );
   }
 
   async getParent(element: TreeItem): Promise<TreeItem | null> {
     if (element instanceof CodeTourStepNode) {
       return new CodeTourNode(element.tour, this.extensionPath);
-    } else {
-      return null;
     }
+    // A sub-folder's parent is the folder that contains it (null at the root),
+    // so reveal can expand the chain for nested tags.
+    if (element instanceof CodeTourNode) {
+      const folderId = element.tour.id.split("::").pop();
+      if (folderId && folderId !== "__loose__") {
+        const { getStore, getWorkspaceId } = await import(
+          "../../lodestar/persistence"
+        );
+        const { findNode } = await import("../../lodestar/tree");
+        const { folderToTour } = await import("../../lodestar/adapter");
+        const found = findNode(getStore(), folderId);
+        if (found && found.parent) {
+          return new CodeTourNode(
+            folderToTour(found.parent, getWorkspaceId()),
+            this.extensionPath
+          );
+        }
+      }
+    }
+    return null;
   }
 
   // This is called whenever a tree item is hovered over, and we're

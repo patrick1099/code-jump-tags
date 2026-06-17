@@ -16,7 +16,7 @@ function tagToStep(tag: TagNode): CodeTourStep {
   return step;
 }
 
-function folderToTour(folder: FolderNode, workspaceId: string): CodeTour {
+export function folderToTour(folder: FolderNode, workspaceId: string): CodeTour {
   return {
     id: `${workspaceId}::${folder.id}`,
     title: folder.title,
