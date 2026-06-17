@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.3 - 2026-06-17
+
+- Code Jump Tags now lives in its own Activity Bar container with a crosshair
+  icon, instead of a panel buried in the Explorer. Click the icon in the left
+  Activity Bar to open the tags view directly.
+
 ## 0.1.2 - 2026-06-17
 
 - Cleaned up leftover CodeTour identifiers so the Marketplace "Feature

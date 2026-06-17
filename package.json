@@ -3,7 +3,7 @@
   "displayName": "Code Jump Tags",
   "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
   "publisher": "patrick1099",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
@@ -362,11 +362,20 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codeJumpTags",
+          "title": "Code Jump Tags",
+          "icon": "images/activitybar.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "codeJumpTags": [
         {
           "id": "codeJumpTags.tags",
-          "name": "Code Jump Tags",
+          "name": "标签",
           "when": "workspaceFolderCount != 0 || codeJumpTags:inTags"
         }
       ]
