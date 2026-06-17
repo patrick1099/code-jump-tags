@@ -3,7 +3,7 @@
   "displayName": "Code Jump Tags",
   "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
   "publisher": "patrick1099",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
@@ -79,6 +79,10 @@
       {
         "command": "codeJumpTags.deleteTag",
         "title": "删除标签"
+      },
+      {
+        "command": "codeJumpTags.renameTag",
+        "title": "重命名标签"
       },
       {
         "command": "codeJumpTags.saveTag",
@@ -177,6 +181,10 @@
         },
         {
           "command": "codeJumpTags.deleteTag",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.renameTag",
           "when": "false"
         },
         {
@@ -339,6 +347,11 @@
           "command": "codeJumpTags.deleteTag",
           "when": "viewItem =~ /^codeJumpTags.tag/",
           "group": "manage@2"
+        },
+        {
+          "command": "codeJumpTags.renameTag",
+          "when": "viewItem =~ /^codeJumpTags.tag/",
+          "group": "change@1"
         },
         {
           "command": "codeJumpTags.copyTagLink",

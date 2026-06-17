@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.4 - 2026-06-17
+
+- Tags can now be renamed straight from the tree: right-click a tag and choose
+  「重命名标签」 to edit its note in a quick input box (the same box folders use),
+  without opening the inline comment editor. The change refreshes both the tree
+  label and the in-editor annotation.
+
 ## 0.1.3 - 2026-06-17
 
 - Code Jump Tags now lives in its own Activity Bar container with a crosshair

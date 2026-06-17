@@ -222,6 +222,36 @@ export async function renameFolder(node: any) {
   await saveStore();
 }
 
+// Rename a tag from the tree, the same way folders are renamed: a quick input
+// box (NOT the inline comment editor) pre-filled with the current note. A tag's
+// "name" is its note; the tree label is the note's first line. saveStore()
+// rebuilds the derived tours and decorator.ts's reaction re-renders the in-editor
+// annotation, so the marker text updates too.
+export async function renameTag(node: any) {
+  const tagId: string | undefined = node?.tagLink?.id ?? node?.tagId;
+  if (!tagId) {
+    window.showInformationMessage(
+      "Code Jump Tags: 请在某个标签上右键使用「重命名标签」"
+    );
+    return;
+  }
+  const found = findNode(getStore(), tagId);
+  if (!found || found.node.type !== "tag") {
+    window.showInformationMessage("Code Jump Tags: 找不到该标签");
+    return;
+  }
+  const note = await window.showInputBox({
+    prompt: "标签注释",
+    value: found.node.note
+  });
+  if (note === undefined || note.trim() === "") return;
+  found.node.note = note;
+  await saveStore();
+  // If this tag's inline edit bubble happens to be open, drop it so it doesn't
+  // linger showing the old text.
+  closeTagEditor(tagId);
+}
+
 // Re-edit a tag's note. Invoked by clicking the above-line CodeLens or the
 // "编辑注释" link in a marked line's hover. Opens the same inline comment box
 // used when creating, prefilled with the current note (unified editing).
@@ -384,6 +414,7 @@ export function registerLodestarCommands(context: ExtensionContext) {
       copyFolderLinks
     ),
     commands.registerCommand(`${EXTENSION_NAME}.renameFolder`, renameFolder),
+    commands.registerCommand(`${EXTENSION_NAME}.renameTag`, renameTag),
     commands.registerCommand(`${EXTENSION_NAME}.editNote`, editNote),
     commands.registerCommand(`${EXTENSION_NAME}.saveTagEdit`, saveTagEdit),
     commands.registerCommand(`${EXTENSION_NAME}.cancelTagEdit`, cancelTagEdit),
