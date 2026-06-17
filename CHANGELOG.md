@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.3.1 - 2026-06-17
+
+- Recycle bin now shows nested sub-folders. When you delete a folder that
+  contains sub-folders, the bin lists its whole subtree (sub-folders and tags, at
+  every depth) as indented rows — previously it only showed the folder's direct
+  tags and hid the sub-folders. Any nested node can be restored on its own, or
+  pick the folder to restore everything. The folder row's tag count is now
+  accurate (counts tags recursively, no longer miscounts sub-folders).
+
 ## 0.3.0 - 2026-06-17
 
 - Folders now behave like a file system: drag a folder (or tag) anywhere — into

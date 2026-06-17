@@ -32,7 +32,7 @@ import {
   removeToTrash,
   restoreSelection
 } from "./tree";
-import { TagNode, TrashedEntry } from "./types";
+import { FolderNode, TreeNode, TrashedEntry } from "./types";
 
 // Confirm a delete, honoring the codeJumpTags.confirmDelete setting. The modal
 // offers a "删除并不再询问" choice that turns the setting off for next time.
@@ -305,23 +305,60 @@ export async function restoreFromTrash() {
     return;
   }
 
-  // Flatten the bin: each trashed folder is one selectable row, with its tags
-  // listed (indented) right under it as individually selectable rows. Picking
-  // the folder restores it whole; picking only some child tags pulls just those
-  // out to the root.
+  // Flatten the bin: each trashed entry is one selectable row, and a trashed
+  // folder's whole subtree (sub-folders AND tags, any depth) is listed indented
+  // under it as individually selectable rows. Picking the folder restores it
+  // whole; picking a nested node pulls just that node (with its subtree) out to
+  // the root.
   // NB: don't name the discriminant `kind` — QuickPickItem already has a `kind`
   // field (separators), which would collide.
   interface TrashPick extends QuickPickItem {
     row: "entry" | "child";
     entry?: TrashedEntry; // set when row === "entry"
     parent?: TrashedEntry; // the trashed folder, when row === "child"
-    child?: TagNode; // the tag inside it, when row === "child"
+    child?: TreeNode; // the nested node, when row === "child"
   }
 
   const tagLabel = (note: string) =>
     note.split(/\r?\n/)[0].trim() || "(空注释)";
 
+  // Count tags nested anywhere under a node (for the folder-row summary).
+  const countTags = (node: TreeNode): number =>
+    node.type === "tag"
+      ? 1
+      : node.children.reduce((n, c) => n + countTags(c), 0);
+
   const items: TrashPick[] = [];
+
+  // Recursively list a trashed folder's descendants as indented rows.
+  const pushDescendants = (
+    folder: FolderNode,
+    entry: TrashedEntry,
+    depth: number
+  ) => {
+    const indent = "   ".repeat(depth);
+    for (const child of folder.children) {
+      if (child.type === "folder") {
+        items.push({
+          row: "child",
+          parent: entry,
+          child,
+          label: `${indent}↳ $(folder) ${child.title}`,
+          description: `子文件夹 · ${countTags(child)} 个标签`
+        });
+        pushDescendants(child, entry, depth + 1);
+      } else {
+        items.push({
+          row: "child",
+          parent: entry,
+          child,
+          label: `${indent}↳ $(bookmark) ${tagLabel(child.note)}`,
+          description: `${child.file}:${child.line}`
+        });
+      }
+    }
+  };
+
   for (const entry of trash) {
     const node = entry.node;
     if (node.type === "folder") {
@@ -329,20 +366,11 @@ export async function restoreFromTrash() {
         row: "entry",
         entry,
         label: `$(folder) ${node.title}`,
-        description: `文件夹 · ${node.children.length} 个标签 · ${relativeTime(
+        description: `文件夹 · ${countTags(node)} 个标签 · ${relativeTime(
           entry.deletedAt
         )}`
       });
-      for (const child of node.children) {
-        if (child.type !== "tag") continue;
-        items.push({
-          row: "child",
-          parent: entry,
-          child,
-          label: `      ↳ $(bookmark) ${tagLabel(child.note)}`,
-          description: `${child.file}:${child.line}`
-        });
-      }
+      pushDescendants(node, entry, 1);
     } else {
       items.push({
         row: "entry",
