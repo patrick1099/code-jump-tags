@@ -144,6 +144,27 @@ describe("recycle bin", () => {
     expect(s.tree.map(n => n.id)).toEqual(["a"]);
     expect(s.trash!).toHaveLength(0); // emptied folder removed from bin
   });
+
+  it("restoreSelection pulls a NESTED sub-folder (with its tags) out of a trashed folder", () => {
+    const s = createEmptyStore();
+    // outer f1 → inner f2 → tag t2, plus a direct tag t1 in f1
+    createFolder(s, "外层", () => "f1");
+    createFolder(s, "内层", () => "f2", "f1");
+    addTag(s, tag("t1"), "f1");
+    addTag(s, tag("t2"), "f2");
+    removeToTrash(s, "f1"); // delete the whole outer folder
+    const folderEntry = s.trash![0];
+    const innerSub = (folderEntry.node as any).children.find(
+      (n: any) => n.id === "f2"
+    );
+    // restore ONLY the nested sub-folder
+    restoreSelection(s, [], [{ parent: folderEntry, child: innerSub }]);
+    // f2 (with t2) is back at root; f1 (with t1) stays in the bin
+    expect(s.tree.map(n => n.id)).toEqual(["f2"]);
+    expect((findNode(s, "f2")!.node as any).children.map((n: any) => n.id)).toEqual(["t2"]);
+    expect(s.trash!).toHaveLength(1);
+    expect((s.trash![0].node as any).children.map((n: any) => n.id)).toEqual(["t1"]);
+  });
 });
 
 describe("findTagByLocation", () => {

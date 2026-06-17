@@ -119,6 +119,24 @@ export function removeNode(store: LodestarStore, id: string): TreeNode | undefin
   return found.siblings.splice(found.index, 1)[0];
 }
 
+// Detach a descendant (by id) from anywhere inside `root`'s subtree, returning
+// it. Unlike removeNode (which works on the live store), this walks a detached
+// subtree — used by trash restore to pull one nested node out of a trashed
+// folder that no longer lives in store.tree.
+export function removeDescendantById(
+  root: TreeNode,
+  id: string
+): TreeNode | undefined {
+  if (root.type !== "folder") return undefined;
+  for (let i = 0; i < root.children.length; i++) {
+    const child = root.children[i];
+    if (child.id === id) return root.children.splice(i, 1)[0];
+    const hit = removeDescendantById(child, id);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 // ── recycle bin ──────────────────────────────────────────────────────────────
 
 // Move a node into the recycle bin (most-recent first, capped at TRASH_LIMIT).
@@ -156,16 +174,17 @@ export function restoreEntries(
   }
 }
 
-// A single tag pulled out of a trashed folder (rather than the whole folder).
+// A single node (tag OR sub-folder, at any depth) pulled out of a trashed folder
+// rather than restoring the whole folder.
 export interface ChildSelection {
   parent: TrashedEntry; // the trashed folder entry
-  child: TagNode;       // a tag inside it
+  child: TreeNode;      // a node nested anywhere inside it
 }
 
-// Restore a mix of whole entries and individual tags-inside-trashed-folders.
-// Whole entries go back to root. A child tag is pulled out of its trashed
-// folder to root (unless that whole folder was also selected, which covers it).
-// Trashed folders left empty afterwards are dropped from the bin.
+// Restore a mix of whole entries and individual nodes-inside-trashed-folders.
+// Whole entries go back to root. A nested node (tag or sub-folder, any depth) is
+// pulled out of its trashed folder to root (unless that whole folder was also
+// selected, which covers it). Trashed folders left empty afterwards are dropped.
 export function restoreSelection(
   store: LodestarStore,
   entries: TrashedEntry[],
@@ -181,10 +200,9 @@ export function restoreSelection(
     if (!store.trash.includes(parent) || parent.node.type !== "folder") {
       continue;
     }
-    const ci = parent.node.children.indexOf(child);
-    if (ci >= 0) {
-      parent.node.children.splice(ci, 1);
-      store.tree.push(child);
+    const removed = removeDescendantById(parent.node, child.id);
+    if (removed) {
+      store.tree.push(removed);
     }
   }
 
