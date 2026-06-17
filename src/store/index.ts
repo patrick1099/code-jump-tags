@@ -76,6 +76,12 @@ export type CodeTourStepTuple = [CodeTour, CodeTourStep, number, number?];
 
 export interface Store {
   tours: CodeTour[];
+  // Code Jump Tags: every folder's tags flattened across ALL nesting depths.
+  // `tours` only holds the top-level folders (it feeds the tree roots + tour
+  // pickers, which must not treat a sub-folder as a top-level playable tour),
+  // so decorations/CodeLens read `allTours` instead to also mark tags that live
+  // inside nested sub-folders. Recomputed alongside `tours` in rebuildTours.
+  allTours: CodeTour[];
   activeTour: ActiveTour | null;
   activeEditorSteps?: CodeTourStepTuple[];
   hasTours: boolean;
@@ -87,6 +93,7 @@ export interface Store {
 
 export const store: Store = observable({
   tours: [],
+  allTours: [],
   activeTour: null,
   isRecording: false,
   isEditing: false,

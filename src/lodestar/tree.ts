@@ -96,6 +96,23 @@ export function createFolder(
   return folder;
 }
 
+// True if `nodeId` is `ancestorId` itself, or lives anywhere inside it. Used to
+// reject dragging a folder into its own subtree (which would detach the folder
+// and then re-insert it under a now-orphaned descendant, losing nodes).
+export function isSelfOrDescendant(
+  store: LodestarStore,
+  ancestorId: string,
+  nodeId: string
+): boolean {
+  if (ancestorId === nodeId) return true;
+  let cur = findNode(store, nodeId);
+  while (cur && cur.parent) {
+    if (cur.parent.id === ancestorId) return true;
+    cur = findNode(store, cur.parent.id);
+  }
+  return false;
+}
+
 export function removeNode(store: LodestarStore, id: string): TreeNode | undefined {
   const found = findNode(store, id);
   if (!found) return undefined;

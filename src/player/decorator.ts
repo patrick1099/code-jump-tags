@@ -36,7 +36,9 @@ const INLINE_NOTE_DECORATOR = vscode.window.createTextEditorDecorationType({
 export async function getTourSteps(
   document: vscode.TextDocument
 ): Promise<CodeTourStepTuple[]> {
-  const steps: CodeTourStepTuple[] = store.tours.flatMap(tour =>
+  // Use allTours (every nesting depth), not tours (top-level only), so tags
+  // inside sub-folders are decorated too.
+  const steps: CodeTourStepTuple[] = store.allTours.flatMap(tour =>
     tour.steps.map(
       (step, stepNumber) => [tour, step, stepNumber] as CodeTourStepTuple
     )
@@ -193,7 +195,10 @@ export async function registerDecorators() {
   // marker visibility toggles. saveStore() rebuilds store.tours, so toggling a
   // single tag's note position flows through here and moves it live.
   reaction(
-    () => [store.showMarkers, store.tours.map(tour => [tour.title, tour.steps])],
+    () => [
+      store.showMarkers,
+      store.allTours.map(tour => [tour.title, tour.steps])
+    ],
     () => {
       onDidChangeCodeLenses.fire();
       if (vscode.window.activeTextEditor) {

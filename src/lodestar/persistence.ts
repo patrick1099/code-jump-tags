@@ -2,7 +2,7 @@ import { runInAction } from "mobx";
 import { Uri, workspace } from "vscode";
 import { STORE_DIRECTORY, STORE_FILE } from "../constants";
 import { store as runtime } from "../store";
-import { treeToTours } from "./adapter";
+import { treeToAllTours, treeToTours } from "./adapter";
 import { createEmptyStore, parse, serialize } from "./tree";
 import { LodestarStore } from "./types";
 
@@ -51,7 +51,10 @@ export async function loadStore(): Promise<void> {
 
 export function rebuildTours(): void {
   runInAction(() => {
-    runtime.tours = treeToTours(cache, getWorkspaceId());
+    const wsId = getWorkspaceId();
+    runtime.tours = treeToTours(cache, wsId);
+    // All tags across every nesting depth — the decoration/CodeLens source.
+    runtime.allTours = treeToAllTours(cache, wsId);
   });
 }
 
