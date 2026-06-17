@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.2 - 2026-06-17
+
+- Cleaned up leftover CodeTour identifiers so the Marketplace "Feature
+  Contributions" page no longer shows `.tour` / tour wording: removed the
+  unused `.tour` language + JSON validation, and renamed the contributed
+  command ids (`addTag`, `deleteTag`, `saveTag`, `moveTagForward`,
+  `moveTagBack`), the tree view id (`codeJumpTags.tags`), and the related
+  context keys/values. No user-facing behavior change.
+
 ## 0.1.1 - 2026-06-17
 
 - Fixed copied tag links opening to "extension not found": the `vscode://` link

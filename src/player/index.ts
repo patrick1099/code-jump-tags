@@ -154,7 +154,7 @@ export async function focusPlayer() {
 //
 // Note: VS Code queries this once per opened document and caches the result, so
 // a line tagged DURING this session keeps its "+" until the file is reopened
-// (refreshCommentingRanges tries to bust that cache; addTourStep also routes a
+// (refreshCommentingRanges tries to bust that cache; addTag also routes a
 // click on such a lingering "+" to the existing note so it's never destructive).
 function makeCommentingRangeProvider() {
   return {
@@ -191,7 +191,7 @@ function makeCommentingRangeProvider() {
 // (the same path that makes the "+" appear) asks VS Code to re-query. Done only
 // while editing — that's the only time the "+" shows, and the ambient edit tour
 // has zero steps so the controller holds no live thread to lose. If VS Code
-// still ignores the re-query, addTourStep keeps the lingering "+" harmless.
+// still ignores the re-query, addTag keeps the lingering "+" harmless.
 // Create the player's comment controller with the shared input-box text, so the
 // "+" (create) box reads the same as the note (edit) box — not VS Code's default
 // "开始讨论" — and wire up the gutter "+" range provider.

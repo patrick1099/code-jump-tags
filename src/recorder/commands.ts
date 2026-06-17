@@ -366,7 +366,7 @@ export function registerRecorderCommands() {
   );
 
   vscode.commands.registerCommand(
-    `${EXTENSION_NAME}.addTourStep`,
+    `${EXTENSION_NAME}.addTag`,
     async (reply: vscode.CommentReply) => {
       const thread = reply.thread;
       const workspaceRoot = workspace.workspaceFolders![0].uri;
@@ -522,7 +522,7 @@ export function registerRecorderCommands() {
   );
 
   vscode.commands.registerCommand(
-    `${EXTENSION_NAME}.saveTourStep`,
+    `${EXTENSION_NAME}.saveTag`,
     async (comment: CodeTourComment) => {
       if (!comment.parent) {
         return;
@@ -618,12 +618,12 @@ export function registerRecorderCommands() {
   }
 
   vscode.commands.registerCommand(
-    `${EXTENSION_NAME}.moveTourStepBack`,
+    `${EXTENSION_NAME}.moveTagBack`,
     moveStep.bind(null, -1)
   );
 
   vscode.commands.registerCommand(
-    `${EXTENSION_NAME}.moveTourStepForward`,
+    `${EXTENSION_NAME}.moveTagForward`,
     moveStep.bind(null, 1)
   );
 
@@ -774,7 +774,7 @@ export function registerRecorderCommands() {
   );
 
   vscode.commands.registerCommand(
-    `${EXTENSION_NAME}.deleteTourStep`,
+    `${EXTENSION_NAME}.deleteTag`,
     async (
       node: CodeTourStepNode | CodeTourComment,
       additionalNodes: CodeTourStepNode[]
