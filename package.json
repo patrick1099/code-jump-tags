@@ -3,7 +3,7 @@
   "displayName": "Code Jump Tags",
   "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
   "publisher": "patrick1099",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
@@ -57,7 +57,7 @@
     },
     "commands": [
       {
-        "command": "codeJumpTags.addTourStep",
+        "command": "codeJumpTags.addTag",
         "title": "添加标签"
       },
       {
@@ -67,21 +67,21 @@
         "icon": "$(link)"
       },
       {
-        "command": "codeJumpTags.moveTourStepForward",
+        "command": "codeJumpTags.moveTagForward",
         "title": "下移标签",
         "icon": "$(arrow-down)"
       },
       {
-        "command": "codeJumpTags.moveTourStepBack",
+        "command": "codeJumpTags.moveTagBack",
         "title": "上移标签",
         "icon": "$(arrow-up)"
       },
       {
-        "command": "codeJumpTags.deleteTourStep",
+        "command": "codeJumpTags.deleteTag",
         "title": "删除标签"
       },
       {
-        "command": "codeJumpTags.saveTourStep",
+        "command": "codeJumpTags.saveTag",
         "title": "保存标签",
         "enablement": "!commentIsEmpty"
       },
@@ -168,7 +168,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "codeJumpTags.addTourStep",
+          "command": "codeJumpTags.addTag",
           "when": "false"
         },
         {
@@ -176,11 +176,11 @@
           "when": "false"
         },
         {
-          "command": "codeJumpTags.deleteTourStep",
+          "command": "codeJumpTags.deleteTag",
           "when": "false"
         },
         {
-          "command": "codeJumpTags.saveTourStep",
+          "command": "codeJumpTags.saveTag",
           "when": "false"
         },
         {
@@ -226,7 +226,7 @@
       ],
       "comments/commentThread/context": [
         {
-          "command": "codeJumpTags.addTourStep",
+          "command": "codeJumpTags.addTag",
           "group": "inline",
           "when": "commentController == codeJumpTags && commentThreadIsEmpty"
         }
@@ -250,24 +250,24 @@
       ],
       "comments/comment/title": [
         {
-          "command": "codeJumpTags.moveTourStepBack",
+          "command": "codeJumpTags.moveTagBack",
           "group": "move@1",
-          "when": "commentController == codeJumpTags && codeJumpTags:canEditTour && commentThread =~ /hasPrevious/"
+          "when": "commentController == codeJumpTags && codeJumpTags:canEditTag && commentThread =~ /hasPrevious/"
         },
         {
-          "command": "codeJumpTags.moveTourStepForward",
+          "command": "codeJumpTags.moveTagForward",
           "group": "move@2",
-          "when": "commentController == codeJumpTags && codeJumpTags:canEditTour && commentThread =~ /hasNext/"
+          "when": "commentController == codeJumpTags && codeJumpTags:canEditTag && commentThread =~ /hasNext/"
         },
         {
-          "command": "codeJumpTags.deleteTourStep",
+          "command": "codeJumpTags.deleteTag",
           "group": "mutate@2",
-          "when": "commentController == codeJumpTags && codeJumpTags:canEditTour"
+          "when": "commentController == codeJumpTags && codeJumpTags:canEditTag"
         }
       ],
       "comments/comment/context": [
         {
-          "command": "codeJumpTags.saveTourStep",
+          "command": "codeJumpTags.saveTag",
           "group": "inline@2",
           "when": "commentController == codeJumpTags && codeJumpTags:recording"
         },
@@ -285,79 +285,79 @@
       "view/title": [
         {
           "command": "codeJumpTags.hideMarkers",
-          "when": "view == codeJumpTags.tours && codeJumpTags:showingMarkers",
+          "when": "view == codeJumpTags.tags && codeJumpTags:showingMarkers",
           "group": "navigation@1"
         },
         {
           "command": "codeJumpTags.showMarkers",
-          "when": "view == codeJumpTags.tours && !codeJumpTags:showingMarkers",
+          "when": "view == codeJumpTags.tags && !codeJumpTags:showingMarkers",
           "group": "navigation@1"
         },
         {
           "command": "codeJumpTags.toggleEditMode",
-          "when": "view == codeJumpTags.tours && !codeJumpTags:isEditing",
+          "when": "view == codeJumpTags.tags && !codeJumpTags:isEditing",
           "group": "navigation@3"
         },
         {
           "command": "codeJumpTags.exitEditMode",
-          "when": "view == codeJumpTags.tours && codeJumpTags:isEditing",
+          "when": "view == codeJumpTags.tags && codeJumpTags:isEditing",
           "group": "navigation@3"
         },
         {
           "command": "codeJumpTags.newFolder",
-          "when": "view == codeJumpTags.tours",
+          "when": "view == codeJumpTags.tags",
           "group": "navigation@4"
         },
         {
           "command": "codeJumpTags.restoreFromTrash",
-          "when": "view == codeJumpTags.tours",
+          "when": "view == codeJumpTags.tags",
           "group": "navigation@5"
         }
       ],
       "view/item/context": [
         {
-          "command": "codeJumpTags.moveTourStepBack",
-          "when": "viewItem =~ /^codeJumpTags.tourStep.hasPrevious/",
+          "command": "codeJumpTags.moveTagBack",
+          "when": "viewItem =~ /^codeJumpTags.tag.hasPrevious/",
           "group": "inline@1"
         },
         {
-          "command": "codeJumpTags.moveTourStepForward",
-          "when": "viewItem =~ /codeJumpTags.tourStep.*(.hasNext)/",
+          "command": "codeJumpTags.moveTagForward",
+          "when": "viewItem =~ /codeJumpTags.tag.*(.hasNext)/",
           "group": "inline@2"
         },
         {
-          "command": "codeJumpTags.moveTourStepBack",
-          "when": "viewItem =~ /^codeJumpTags.tourStep.hasPrevious/",
+          "command": "codeJumpTags.moveTagBack",
+          "when": "viewItem =~ /^codeJumpTags.tag.hasPrevious/",
           "group": "basic@1"
         },
         {
-          "command": "codeJumpTags.moveTourStepForward",
-          "when": "viewItem =~ /codeJumpTags.tourStep.*(.hasNext)/",
+          "command": "codeJumpTags.moveTagForward",
+          "when": "viewItem =~ /codeJumpTags.tag.*(.hasNext)/",
           "group": "basic@2"
         },
         {
-          "command": "codeJumpTags.deleteTourStep",
-          "when": "viewItem =~ /^codeJumpTags.tourStep/",
+          "command": "codeJumpTags.deleteTag",
+          "when": "viewItem =~ /^codeJumpTags.tag/",
           "group": "manage@2"
         },
         {
           "command": "codeJumpTags.copyTagLink",
-          "when": "viewItem =~ /^codeJumpTags.tourStep/",
+          "when": "viewItem =~ /^codeJumpTags.tag/",
           "group": "change@3"
         },
         {
           "command": "codeJumpTags.renameFolder",
-          "when": "view == codeJumpTags.tours && viewItem =~ /^codeJumpTags.tour(\\.|$)/",
+          "when": "view == codeJumpTags.tags && viewItem =~ /^codeJumpTags.folder(\\.|$)/",
           "group": "change@1"
         },
         {
           "command": "codeJumpTags.copyFolderLinks",
-          "when": "view == codeJumpTags.tours && viewItem =~ /^codeJumpTags.tour(\\.|$)/",
+          "when": "view == codeJumpTags.tags && viewItem =~ /^codeJumpTags.folder(\\.|$)/",
           "group": "change@2"
         },
         {
           "command": "codeJumpTags.deleteFolder",
-          "when": "view == codeJumpTags.tours && viewItem =~ /^codeJumpTags.tour(\\.|$)/",
+          "when": "view == codeJumpTags.tags && viewItem =~ /^codeJumpTags.folder(\\.|$)/",
           "group": "manage@3"
         }
       ]
@@ -365,9 +365,9 @@
     "views": {
       "explorer": [
         {
-          "id": "codeJumpTags.tours",
+          "id": "codeJumpTags.tags",
           "name": "Code Jump Tags",
-          "when": "workspaceFolderCount != 0 || codeJumpTags:inTour"
+          "when": "workspaceFolderCount != 0 || codeJumpTags:inTags"
         }
       ]
     }

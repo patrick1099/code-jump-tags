@@ -138,7 +138,7 @@ export async function toggleEditMode(): Promise<void> {
     -1,
     workspaceRoot,
     /* startInEditMode */ true,
-    /* canEditTour */ true
+    /* canEditTag */ true
   );
 
   window.setStatusBarMessage("Code Jump Tags: 注释编辑模式已开启", 2000);

@@ -179,7 +179,7 @@ class CodeTourTreeProvider
 
 export function registerTreeProvider(extensionPath: string) {
   const treeDataProvider = new CodeTourTreeProvider(extensionPath);
-  const treeView = window.createTreeView(`${EXTENSION_NAME}.tours`, {
+  const treeView = window.createTreeView(`${EXTENSION_NAME}.tags`, {
     showCollapseAll: true,
     treeDataProvider,
     canSelectMany: true,

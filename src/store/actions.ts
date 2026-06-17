@@ -20,8 +20,8 @@ import {
 } from "../utils";
 import { progress } from "./storage";
 
-const CAN_EDIT_TOUR_KEY = `${EXTENSION_NAME}:canEditTour`;
-const IN_TOUR_KEY = `${EXTENSION_NAME}:inTour`;
+const CAN_EDIT_TOUR_KEY = `${EXTENSION_NAME}:canEditTag`;
+const IN_TOUR_KEY = `${EXTENSION_NAME}:inTags`;
 const RECORDING_KEY = `${EXTENSION_NAME}:recording`;
 export const EDITING_KEY = `${EXTENSION_NAME}:isEditing`;
 
