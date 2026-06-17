@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.3.2 - 2026-06-17
+
+- Recycle bin checkboxes now cascade like a file tree: checking a folder checks
+  every sub-folder and tag under it, and a folder stays checked only while all of
+  its children are checked — uncheck them all and the folder unchecks itself.
+
 ## 0.3.1 - 2026-06-17
 
 - Recycle bin now shows nested sub-folders. When you delete a folder that

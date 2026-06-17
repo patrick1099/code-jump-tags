@@ -32,7 +32,7 @@ import {
   removeToTrash,
   restoreSelection
 } from "./tree";
-import { FolderNode, TreeNode, TrashedEntry } from "./types";
+import { TreeNode, TrashedEntry } from "./types";
 
 // Confirm a delete, honoring the codeJumpTags.confirmDelete setting. The modal
 // offers a "删除并不再询问" choice that turns the setting off for next time.
@@ -295,8 +295,12 @@ export async function deleteFolder(node: any) {
   closeTagEditor();
 }
 
-// Restore one or more deleted tags/folders from the recycle bin back to the
-// tree root. Lists the bin in a multi-select QuickPick (most recent first).
+// Restore deleted tags/folders from the recycle bin back to the tree root. The
+// bin is a tree-shaped multi-select QuickPick: each trashed folder lists its
+// whole subtree (sub-folders + tags, any depth) as indented rows. Checkboxes
+// cascade like a file tree — checking a folder checks everything under it, and a
+// folder stays checked only while all its children are checked (uncheck them all
+// and the folder unchecks itself).
 export async function restoreFromTrash() {
   const store = getStore();
   const trash = store.trash ?? [];
@@ -305,101 +309,133 @@ export async function restoreFromTrash() {
     return;
   }
 
-  // Flatten the bin: each trashed entry is one selectable row, and a trashed
-  // folder's whole subtree (sub-folders AND tags, any depth) is listed indented
-  // under it as individually selectable rows. Picking the folder restores it
-  // whole; picking a nested node pulls just that node (with its subtree) out to
-  // the root.
-  // NB: don't name the discriminant `kind` — QuickPickItem already has a `kind`
-  // field (separators), which would collide.
-  interface TrashPick extends QuickPickItem {
-    row: "entry" | "child";
-    entry?: TrashedEntry; // set when row === "entry"
-    parent?: TrashedEntry; // the trashed folder, when row === "child"
-    child?: TreeNode; // the nested node, when row === "child"
+  interface TrashRow extends QuickPickItem {
+    node: TreeNode;
+    entry: TrashedEntry; // the top-level trash entry this row belongs to
+    isEntry: boolean; // true => this row IS the top-level entry
+    parentRow?: TrashRow; // the row one level up (undefined for entries)
+    depth: number; // 0 for an entry row, increasing downward
   }
 
   const tagLabel = (note: string) =>
     note.split(/\r?\n/)[0].trim() || "(空注释)";
-
-  // Count tags nested anywhere under a node (for the folder-row summary).
   const countTags = (node: TreeNode): number =>
     node.type === "tag"
       ? 1
       : node.children.reduce((n, c) => n + countTags(c), 0);
 
-  const items: TrashPick[] = [];
-
-  // Recursively list a trashed folder's descendants as indented rows.
-  const pushDescendants = (
-    folder: FolderNode,
+  // Build one row per node (entries + every nested descendant), keeping the
+  // parent-row link so the checkbox cascade can walk the hierarchy.
+  const rows: TrashRow[] = [];
+  const addRow = (
+    node: TreeNode,
     entry: TrashedEntry,
+    isEntry: boolean,
+    parentRow: TrashRow | undefined,
     depth: number
   ) => {
-    const indent = "   ".repeat(depth);
-    for (const child of folder.children) {
-      if (child.type === "folder") {
-        items.push({
-          row: "child",
-          parent: entry,
-          child,
-          label: `${indent}↳ $(folder) ${child.title}`,
-          description: `子文件夹 · ${countTags(child)} 个标签`
-        });
-        pushDescendants(child, entry, depth + 1);
-      } else {
-        items.push({
-          row: "child",
-          parent: entry,
-          child,
-          label: `${indent}↳ $(bookmark) ${tagLabel(child.note)}`,
-          description: `${child.file}:${child.line}`
-        });
+    const prefix = isEntry ? "" : `${"   ".repeat(depth)}↳ `;
+    const glyph = node.type === "folder" ? "$(folder)" : "$(bookmark)";
+    const title =
+      node.type === "folder" ? node.title : tagLabel(node.note);
+    let description: string;
+    if (node.type === "folder") {
+      description = isEntry
+        ? `文件夹 · ${countTags(node)} 个标签 · ${relativeTime(entry.deletedAt)}`
+        : `子文件夹 · ${countTags(node)} 个标签`;
+    } else {
+      description = isEntry
+        ? `${node.file}:${node.line} · ${relativeTime(entry.deletedAt)}`
+        : `${node.file}:${node.line}`;
+    }
+    const row: TrashRow = {
+      node, entry, isEntry, parentRow, depth,
+      label: `${prefix}${glyph} ${title}`,
+      description
+    };
+    rows.push(row);
+    if (node.type === "folder") {
+      for (const child of node.children) {
+        addRow(child, entry, false, row, depth + 1);
       }
     }
   };
+  for (const entry of trash) addRow(entry.node, entry, true, undefined, 0);
 
-  for (const entry of trash) {
-    const node = entry.node;
-    if (node.type === "folder") {
-      items.push({
-        row: "entry",
-        entry,
-        label: `$(folder) ${node.title}`,
-        description: `文件夹 · ${countTags(node)} 个标签 · ${relativeTime(
-          entry.deletedAt
-        )}`
-      });
-      pushDescendants(node, entry, 1);
-    } else {
-      items.push({
-        row: "entry",
-        entry,
-        label: `$(bookmark) ${tagLabel(node.note)}`,
-        description: `${node.file}:${node.line} · ${relativeTime(
-          entry.deletedAt
-        )}`
-      });
+  const childrenOf = (row: TrashRow) => rows.filter(r => r.parentRow === row);
+  const descendantsOf = (row: TrashRow): TrashRow[] => {
+    const out: TrashRow[] = [];
+    const stack = childrenOf(row);
+    while (stack.length) {
+      const r = stack.pop()!;
+      out.push(r);
+      stack.push(...childrenOf(r));
     }
-  }
+    return out;
+  };
+  // Deepest first so a child folder's state is settled before its parent reads it.
+  const folderRowsDeepestFirst = rows
+    .filter(r => r.node.type === "folder")
+    .sort((a, b) => b.depth - a.depth);
 
-  const picked = await window.showQuickPick(items, {
-    canPickMany: true,
-    placeHolder:
-      "选择要恢复的项(可多选):勾文件夹=整个还原,勾里面的标签=只取出那几个;恢复到根目录"
+  const qp = window.createQuickPick<TrashRow>();
+  qp.items = rows;
+  qp.canSelectMany = true;
+  qp.placeholder =
+    "勾选要恢复的项(恢复到根目录):勾文件夹会连同里面的子文件夹/标签一起勾选";
+
+  let current = new Set<TrashRow>();
+  let updating = false;
+  qp.onDidChangeSelection(selected => {
+    if (updating) return;
+    const next = new Set(selected);
+    const added = [...next].filter(r => !current.has(r));
+    const removed = [...current].filter(r => !next.has(r));
+
+    // Checking/unchecking a folder cascades to its whole subtree.
+    const result = new Set(next);
+    for (const r of added) descendantsOf(r).forEach(d => result.add(d));
+    for (const r of removed) descendantsOf(r).forEach(d => result.delete(d));
+
+    // A folder is checked iff it has children and they're ALL checked.
+    for (const folder of folderRowsDeepestFirst) {
+      const kids = childrenOf(folder);
+      if (kids.length > 0 && kids.every(k => result.has(k))) result.add(folder);
+      else result.delete(folder);
+    }
+
+    current = result;
+    const sameSet =
+      result.size === next.size && [...result].every(r => next.has(r));
+    if (!sameSet) {
+      // Re-writing the selection re-fires this event; the flag + sameSet guard
+      // keep it from looping.
+      updating = true;
+      qp.selectedItems = [...result];
+      updating = false;
+    }
   });
+
+  const picked = await new Promise<TrashRow[] | undefined>(resolve => {
+    qp.onDidAccept(() => resolve([...qp.selectedItems]));
+    qp.onDidHide(() => resolve(undefined));
+    qp.show();
+  });
+  qp.dispose();
   if (!picked || picked.length === 0) return;
 
-  const entries = picked
-    .filter(p => p.row === "entry")
-    .map(p => p.entry!);
+  // Whole top-level entries restore wholesale; nested picks pull a node out to
+  // the root. Sort nested by depth ascending so an ancestor is extracted before
+  // its own descendants (the descendant then comes along and is skipped).
+  const entries = picked.filter(r => r.isEntry).map(r => r.entry);
   const children = picked
-    .filter(p => p.row === "child")
-    .map(p => ({ parent: p.parent!, child: p.child! }));
+    .filter(r => !r.isEntry)
+    .sort((a, b) => a.depth - b.depth)
+    .map(r => ({ parent: r.entry, child: r.node }));
 
   restoreSelection(store, entries, children);
   await saveStore();
-  window.setStatusBarMessage(`Code Jump Tags: 已恢复 ${picked.length} 项`, 2000);
+  window.setStatusBarMessage("Code Jump Tags: 已从回收站恢复所选项", 2000);
 }
 
 const folderIdGen = () =>

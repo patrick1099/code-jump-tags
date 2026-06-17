@@ -3,7 +3,7 @@
   "displayName": "Code Jump Tags",
   "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
   "publisher": "patrick1099",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
