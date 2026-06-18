@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.3.5 - 2026-06-18
+
+- Fixed the gutter icon smearing down several lines when you type newlines
+  inside a tagged line (e.g. join the line above, then press Enter a few times).
+  The tag's line number was correct, but the icon's decoration range was being
+  auto-expanded across the new lines and never repainted. The gutter is now
+  repainted as a clean single-line marker on every line-changing edit, even when
+  the tag itself doesn't move.
+
 ## 0.3.4 - 2026-06-18
 
 - Fixed line tracking for a newline typed at the very START of a line (column 0),
