@@ -196,6 +196,44 @@ describe("reorder via moveNode (up/down semantics)", () => {
   });
 });
 
+import { shiftedLine, LineEdit } from "../../src/lodestar/tree";
+
+describe("shiftedLine (live line tracking)", () => {
+  // insert N blank lines starting at 0-based line `at`
+  function insert(at: number, n: number): LineEdit {
+    return { start: at, end: at, delta: n };
+  }
+  // delete the 0-based line range [from, to]
+  function del(from: number, to: number): LineEdit {
+    return { start: from, end: to, delta: -(to - from) };
+  }
+
+  it("shifts a tag DOWN when lines are inserted above it", () => {
+    // tag at 0-based 3936 (line 3937), insert 3 lines high above -> 3939
+    expect(shiftedLine(3936, [insert(10, 3)])).toBe(3939);
+  });
+
+  it("shifts a tag UP when lines are deleted above it", () => {
+    expect(shiftedLine(3936, [del(10, 12)])).toBe(3934);
+  });
+
+  it("does NOT move a tag when the edit ends on its own line", () => {
+    expect(shiftedLine(5, [{ start: 5, end: 5, delta: 1 }])).toBe(5);
+  });
+
+  it("does NOT move a tag when the edit is entirely below it", () => {
+    expect(shiftedLine(5, [insert(8, 4)])).toBe(5);
+  });
+
+  it("accumulates multiple edits above the tag", () => {
+    expect(shiftedLine(20, [insert(2, 1), del(5, 7), insert(9, 5)])).toBe(24);
+  });
+
+  it("ignores zero-delta (same-line text) edits", () => {
+    expect(shiftedLine(5, [{ start: 1, end: 1, delta: 0 }])).toBe(5);
+  });
+});
+
 import { isSelfOrDescendant } from "../../src/lodestar/tree";
 
 describe("isSelfOrDescendant (folder-drag guard)", () => {

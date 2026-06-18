@@ -211,6 +211,33 @@ export function restoreSelection(
   );
 }
 
+// ── live line tracking ───────────────────────────────────────────────────────
+
+// One document edit's effect on line numbers, in 0-based lines. `start`/`end`
+// are the edit's range in the PRE-edit document (VS Code reports every change in
+// an event relative to the document before any of them applied); `delta` is the
+// net lines added minus removed.
+export interface LineEdit {
+  start: number;
+  end: number;
+  delta: number;
+}
+
+// New 0-based position for a marker currently at `line0` after the given edits.
+// An edit that ends strictly ABOVE the marker shifts it by that edit's delta;
+// edits on or after the marker's own line leave it put. This mirrors how VS Code
+// auto-tracks a gutter decoration's range, so the tag's note (a CodeLens, which
+// does NOT auto-track) stays glued to the same line as its gutter icon.
+export function shiftedLine(line0: number, edits: LineEdit[]): number {
+  let result = line0;
+  for (const e of edits) {
+    if (e.delta !== 0 && e.end < line0) {
+      result += e.delta;
+    }
+  }
+  return result;
+}
+
 // Move node `id` to be at `index` inside folder `toParentId` (null == root).
 export function moveNode(
   store: LodestarStore,
