@@ -197,8 +197,17 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
   }
 
   if (changed > 0) {
-    rebuildTours(); // immediate live re-render of gutter + note together
+    // rebuildTours triggers the decorator reaction, which repaints the gutter as
+    // fresh single-line ranges from the updated stored lines (and moves the note
+    // CodeLens with it). debounced save persists the new positions.
+    rebuildTours();
     debouncedSaveStore();
+  } else if (vscode.window.activeTextEditor?.document === e.document) {
+    // Lines were added/removed but no tag moved — e.g. a newline typed INSIDE a
+    // tagged line. VS Code auto-expands the existing gutter decoration's range
+    // across the new lines (smearing the icon down several rows). Repaint so the
+    // gutter is a clean single-line range again from the (unchanged) stored line.
+    updateDecorations(vscode.window.activeTextEditor);
   }
 }
 
