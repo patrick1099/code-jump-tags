@@ -20,6 +20,7 @@ import {
 import { getActiveWorkspacePath, getRelativePath } from "../utils";
 import { getStore, saveStore } from "../lodestar/persistence";
 import { addTag, findTagByLocation } from "../lodestar/tree";
+import { linePattern } from "../lodestar/relocate";
 import { TagNode } from "../lodestar/types";
 
 export async function saveTour(tour: CodeTour) {
@@ -385,10 +386,7 @@ export function registerRecorderCommands() {
       if (threadEditor && lineIndex < threadEditor.document.lineCount) {
         lineText = threadEditor.document.lineAt(lineIndex).text.trim();
       }
-      const pattern =
-        lineText && lineText.length > 0
-          ? "^[^\\S\\n]*" + lineText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-          : undefined;
+      const pattern = lineText ? linePattern(lineText) : undefined;
 
       // Dismiss the native editing bubble on the NEXT tick. Disposing the thread
       // synchronously inside its own reply handler wedges VS Code's comment
