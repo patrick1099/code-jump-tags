@@ -2,8 +2,11 @@
 // Licensed under the MIT License.
 
 import { reaction } from "mobx";
+import { debounce } from "throttle-debounce";
 import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
+import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
+import { findNode, LineEdit, shiftedLine } from "../lodestar/tree";
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
@@ -141,6 +144,63 @@ function clearDecorations(editor: vscode.TextEditor) {
   editor.setDecorations(INLINE_NOTE_DECORATOR, []);
 }
 
+// Persist line shifts off the keystroke path: re-render is immediate (via
+// rebuildTours below), but writing store.json is debounced so we don't hit disk
+// on every keypress.
+const debouncedSaveStore = debounce(800, () => {
+  saveStore();
+});
+
+// Keep tags glued to their code as you edit ABOVE them. The gutter icon already
+// auto-tracks (VS Code shifts decoration ranges on edits), but the note CodeLens
+// recomputes from the stored line and does NOT — so without this they drift
+// apart. Here we shift each affected tag's stored line by the edit's delta, then
+// re-derive the tours so BOTH markers paint from the same updated line (and the
+// new position persists, fixing the marker jumping back on reload).
+async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
+  if (!store.showMarkers || DISABLED_SCHEMES.includes(e.document.uri.scheme)) {
+    return;
+  }
+  if (e.contentChanges.length === 0) {
+    return;
+  }
+
+  const edits: LineEdit[] = e.contentChanges.map(c => ({
+    start: c.range.start.line,
+    end: c.range.end.line,
+    delta: (c.text.match(/\n/g)?.length ?? 0) - (c.range.end.line - c.range.start.line)
+  }));
+  if (edits.every(edit => edit.delta === 0)) {
+    return; // pure same-line text edit — no lines added/removed
+  }
+
+  // Which tags live in this document (resolves each tag's file uri the same way
+  // the decorations do, so matching is exact).
+  const steps = await getTourSteps(e.document);
+  const cache = getStore();
+  let changed = 0;
+  for (const [, step] of steps) {
+    if (!step.id) {
+      continue;
+    }
+    const found = findNode(cache, step.id);
+    if (!found || found.node.type !== "tag") {
+      continue;
+    }
+    const line0 = found.node.line - 1;
+    const shifted = shiftedLine(line0, edits);
+    if (shifted !== line0 && shifted >= 0) {
+      found.node.line = shifted + 1;
+      changed++;
+    }
+  }
+
+  if (changed > 0) {
+    rebuildTours(); // immediate live re-render of gutter + note together
+    debouncedSaveStore();
+  }
+}
+
 // CodeLens shown on the line ABOVE each marked line, displaying the tag note
 // (first line). Non-clickable: it's a label, not an action.
 const onDidChangeCodeLenses = new vscode.EventEmitter<void>();
@@ -190,6 +250,10 @@ export async function registerDecorators() {
       updateDecorations(vscode.window.activeTextEditor);
     }
   });
+
+  // Track edits so a tag's note follows its code (and its gutter icon) instead of
+  // staying pinned to the original line number.
+  vscode.workspace.onDidChangeTextDocument(trackLineShifts);
 
   // Re-render whenever tags change (added / edited / removed / repositioned) or
   // marker visibility toggles. saveStore() rebuilds store.tours, so toggling a

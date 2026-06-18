@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.3.3 - 2026-06-18
+
+- Tags now follow your code as you edit above them. Previously the gutter icon
+  auto-tracked edits (it slid down when you inserted lines above) but the note
+  shown above the line stayed pinned to the original line number, so the two
+  drifted apart. Editing above a tag now shifts the tag's stored line by the
+  same amount, so the icon and the note move together — and the new position is
+  saved, so the marker no longer jumps back to the old line after a reload.
+
 ## 0.3.2 - 2026-06-17
 
 - Recycle bin checkboxes now cascade like a file tree: checking a folder checks
