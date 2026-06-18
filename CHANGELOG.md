@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.3.6 - 2026-06-18
+
+- Fixed the marker drifting to the old line after you overwrite a file wholesale
+  (copy the whole file out, edit it, paste it all back). The jump already
+  recovered the right line by searching for the tagged line's text, but the
+  gutter crosshair + note kept reading the stale stored line, so they pointed at
+  the wrong place while clicking the tag jumped correctly. The display now goes
+  through the same content recovery as the jump, so the marker and the jump
+  target always agree. The stored anchor (line + content pattern) is also
+  refreshed live as you edit, so recovery stays accurate over time. Limitation:
+  if the tagged line's own text changes, there is nothing left to anchor to and
+  the tag can't be recovered.
+
 ## 0.3.5 - 2026-06-18
 
 - Fixed the gutter icon smearing down several lines when you type newlines

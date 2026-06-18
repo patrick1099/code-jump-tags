@@ -6,7 +6,8 @@ import { debounce } from "throttle-debounce";
 import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
 import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
-import { findNode, LineEdit, shiftedLine } from "../lodestar/tree";
+import { findNode, LineEdit } from "../lodestar/tree";
+import { reanchorTag, resolveLine } from "../lodestar/relocate";
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
@@ -56,7 +57,12 @@ export async function getTourSteps(
       if (uri.toString().localeCompare(document.uri.toString()) === 0) {
         let line;
         if (step.line) {
-          line = step.line - 1;
+          // Resolve the display line through the content pattern, so the gutter
+          // crosshair + note recover their line after a wholesale overwrite /
+          // reload (the stored line goes stale, but the line's text is found
+          // again). This is the SAME recovery the jump command uses, so the
+          // marker and the jump target always agree.
+          line = resolveLine(contents, step.line, step.pattern) - 1;
         } else if (step.pattern) {
           const match = contents.match(new RegExp(step.pattern, "m"));
           if (match) {
@@ -178,6 +184,7 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
   // Which tags live in this document (resolves each tag's file uri the same way
   // the decorations do, so matching is exact).
   const steps = await getTourSteps(e.document);
+  const text = e.document.getText();
   const cache = getStore();
   let changed = 0;
   for (const [, step] of steps) {
@@ -188,10 +195,14 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
     if (!found || found.node.type !== "tag") {
       continue;
     }
-    const line0 = found.node.line - 1;
-    const shifted = shiftedLine(line0, edits);
-    if (shifted !== line0 && shifted >= 0) {
-      found.node.line = shifted + 1;
+    const node = found.node;
+    // Re-anchor: shift by the edit, let content recovery override a wrong guess
+    // (overwrite case), and refresh the anchor pattern from the new line text so
+    // the stored anchor never goes stale. Persist BOTH line and pattern.
+    const after = reanchorTag(text, { line: node.line, pattern: node.pattern }, edits);
+    if (after.line !== node.line || after.pattern !== node.pattern) {
+      node.line = after.line;
+      node.pattern = after.pattern;
       changed++;
     }
   }
