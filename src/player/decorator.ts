@@ -168,6 +168,7 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
   const edits: LineEdit[] = e.contentChanges.map(c => ({
     start: c.range.start.line,
     end: c.range.end.line,
+    endChar: c.range.end.character,
     delta: (c.text.match(/\n/g)?.length ?? 0) - (c.range.end.line - c.range.start.line)
   }));
   if (edits.every(edit => edit.delta === 0)) {

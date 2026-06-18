@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.3.4 - 2026-06-18
+
+- Fixed line tracking for a newline typed at the very START of a line (column 0),
+  which pushes that line's code down a row. 0.3.3 missed this case — the edit
+  "ends" on the tag's own line, so neither the icon nor the note moved while the
+  tagged code slid down. The anchor is now treated as the start of the tag's
+  line, so a line-start newline (or joining the previous line onto it) moves the
+  tag with its code.
+
 ## 0.3.3 - 2026-06-18
 
 - Tags now follow your code as you edit above them. Previously the gutter icon

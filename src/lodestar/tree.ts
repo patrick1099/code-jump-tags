@@ -213,25 +213,32 @@ export function restoreSelection(
 
 // ── live line tracking ───────────────────────────────────────────────────────
 
-// One document edit's effect on line numbers, in 0-based lines. `start`/`end`
-// are the edit's range in the PRE-edit document (VS Code reports every change in
-// an event relative to the document before any of them applied); `delta` is the
-// net lines added minus removed.
+// One document edit's effect on line numbers, in 0-based lines/columns. `start`,
+// `end`, `endChar` are the edit's range in the PRE-edit document (VS Code reports
+// every change in an event relative to the document before any of them applied);
+// `delta` is the net lines added minus removed.
 export interface LineEdit {
   start: number;
   end: number;
+  endChar: number;
   delta: number;
 }
 
 // New 0-based position for a marker currently at `line0` after the given edits.
-// An edit that ends strictly ABOVE the marker shifts it by that edit's delta;
-// edits on or after the marker's own line leave it put. This mirrors how VS Code
-// auto-tracks a gutter decoration's range, so the tag's note (a CodeLens, which
-// does NOT auto-track) stays glued to the same line as its gutter icon.
+// The marker is anchored to the START (column 0) of its line, so it moves by an
+// edit's delta exactly when that edit ENDS at or before the anchor: either the
+// edit ends on a higher line, or it ends right at column 0 of the marker's own
+// line (e.g. a line-start newline, which pushes the tagged code down a row). An
+// edit ending mid-line or at the line's end leaves the marker put. This mirrors
+// VS Code's gutter-decoration tracking so the tag's note (a CodeLens, which does
+// NOT auto-track) stays glued to the same line as its gutter icon.
 export function shiftedLine(line0: number, edits: LineEdit[]): number {
   let result = line0;
   for (const e of edits) {
-    if (e.delta !== 0 && e.end < line0) {
+    if (e.delta === 0) {
+      continue;
+    }
+    if (e.end < line0 || (e.end === line0 && e.endChar === 0)) {
       result += e.delta;
     }
   }

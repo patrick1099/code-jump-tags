@@ -199,38 +199,46 @@ describe("reorder via moveNode (up/down semantics)", () => {
 import { shiftedLine, LineEdit } from "../../src/lodestar/tree";
 
 describe("shiftedLine (live line tracking)", () => {
-  // insert N blank lines starting at 0-based line `at`
-  function insert(at: number, n: number): LineEdit {
-    return { start: at, end: at, delta: n };
+  // insert N blank lines at 0-based (line, col)
+  function insertAt(line: number, col: number, n: number): LineEdit {
+    return { start: line, end: line, endChar: col, delta: n };
   }
-  // delete the 0-based line range [from, to]
+  // delete the 0-based whole-line range [from, to)
   function del(from: number, to: number): LineEdit {
-    return { start: from, end: to, delta: -(to - from) };
+    return { start: from, end: to, endChar: 0, delta: -(to - from) };
   }
 
   it("shifts a tag DOWN when lines are inserted above it", () => {
     // tag at 0-based 3936 (line 3937), insert 3 lines high above -> 3939
-    expect(shiftedLine(3936, [insert(10, 3)])).toBe(3939);
+    expect(shiftedLine(3936, [insertAt(10, 0, 3)])).toBe(3939);
   });
 
   it("shifts a tag UP when lines are deleted above it", () => {
     expect(shiftedLine(3936, [del(10, 12)])).toBe(3934);
   });
 
-  it("does NOT move a tag when the edit ends on its own line", () => {
-    expect(shiftedLine(5, [{ start: 5, end: 5, delta: 1 }])).toBe(5);
+  it("MOVES a tag when a newline is inserted at the START of its own line", () => {
+    // cursor at (5,0), press Enter: the tagged code is pushed down to line 6
+    expect(shiftedLine(5, [insertAt(5, 0, 1)])).toBe(6);
+  });
+
+  it("does NOT move a tag when the edit ends mid-line / at line end", () => {
+    // newline at end of the tag's line: tagged code stays on line 5
+    expect(shiftedLine(5, [insertAt(5, 12, 1)])).toBe(5);
   });
 
   it("does NOT move a tag when the edit is entirely below it", () => {
-    expect(shiftedLine(5, [insert(8, 4)])).toBe(5);
+    expect(shiftedLine(5, [insertAt(8, 0, 4)])).toBe(5);
   });
 
   it("accumulates multiple edits above the tag", () => {
-    expect(shiftedLine(20, [insert(2, 1), del(5, 7), insert(9, 5)])).toBe(24);
+    expect(
+      shiftedLine(20, [insertAt(2, 0, 1), del(5, 7), insertAt(9, 3, 5)])
+    ).toBe(24);
   });
 
   it("ignores zero-delta (same-line text) edits", () => {
-    expect(shiftedLine(5, [{ start: 1, end: 1, delta: 0 }])).toBe(5);
+    expect(shiftedLine(5, [{ start: 1, end: 1, endChar: 0, delta: 0 }])).toBe(5);
   });
 });
 
