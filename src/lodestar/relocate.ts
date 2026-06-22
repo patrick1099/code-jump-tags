@@ -1,5 +1,40 @@
 import { LineEdit, shiftedLine } from "./tree";
 
+export const SIMILARITY_THRESHOLD = 0.9;
+export const SEARCH_RADII = [8, 40, Infinity];
+export const MAX_CMP_LEN = 200;
+
+// Collapse a line to its comparison form: trim ends, squeeze internal
+// whitespace runs to a single space. Blank/whitespace-only -> "".
+export function normalizeWs(s: string): string {
+  return s.trim().replace(/\s+/g, " ");
+}
+
+// Normalized Levenshtein similarity in [0,1]. Inputs are compared as-is
+// (callers pass normalizeWs'd strings). Each side is capped at MAX_CMP_LEN
+// chars to bound the DP cost. Two empty strings count as identical (1).
+export function similarity(a: string, b: string): number {
+  const s = a.length > MAX_CMP_LEN ? a.slice(0, MAX_CMP_LEN) : a;
+  const t = b.length > MAX_CMP_LEN ? b.slice(0, MAX_CMP_LEN) : b;
+  const n = s.length;
+  const m = t.length;
+  if (n === 0 && m === 0) return 1;
+  if (n === 0 || m === 0) return 0;
+  let prev = new Array(m + 1);
+  let cur = new Array(m + 1);
+  for (let j = 0; j <= m; j++) prev[j] = j;
+  for (let i = 1; i <= n; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= m; j++) {
+      const cost = s[i - 1] === t[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  const dist = prev[m];
+  return 1 - dist / Math.max(n, m);
+}
+
 // A tag's position anchor: 1-based line plus its optional content pattern.
 export interface TagAnchor {
   line: number;
