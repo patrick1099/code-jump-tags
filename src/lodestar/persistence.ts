@@ -3,7 +3,7 @@ import { Uri, workspace } from "vscode";
 import { STORE_DIRECTORY, STORE_FILE } from "../constants";
 import { store as runtime } from "../store";
 import { treeToAllTours, treeToTours } from "./adapter";
-import { createEmptyStore, parse, serialize } from "./tree";
+import { createEmptyStore, migrateLooseTags, newFolderId, parse, serialize } from "./tree";
 import { LodestarStore } from "./types";
 
 let cache: LodestarStore = createEmptyStore();
@@ -46,6 +46,7 @@ export async function loadStore(): Promise<void> {
       cache = createEmptyStore();
     }
   }
+  migrateLooseTags(cache, newFolderId);
   rebuildTours();
 }
 

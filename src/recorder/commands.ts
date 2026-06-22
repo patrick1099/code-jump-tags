@@ -19,7 +19,12 @@ import {
 } from "../store/actions";
 import { getActiveWorkspacePath, getRelativePath } from "../utils";
 import { getStore, saveStore } from "../lodestar/persistence";
-import { addTag, findTagByLocation } from "../lodestar/tree";
+import {
+  addTag,
+  findTagByLocation,
+  getOrCreateInbox,
+  newFolderId
+} from "../lodestar/tree";
 import { linePattern } from "../lodestar/relocate";
 import { TagNode } from "../lodestar/types";
 
@@ -430,7 +435,8 @@ export function registerRecorderCommands() {
         pattern,
         createdAt: new Date().toISOString()
       };
-      addTag(getStore(), tag); // loose (root) by default
+      const inbox = getOrCreateInbox(getStore(), newFolderId);
+      addTag(getStore(), tag, inbox.id); // new tags land in the inbox folder
       await saveStore();
       dismiss();
     }
