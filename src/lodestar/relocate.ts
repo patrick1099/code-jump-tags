@@ -1,4 +1,5 @@
 import { LineEdit, shiftedLine } from "./tree";
+import { LodestarStore, TreeNode } from "./types";
 
 export const SIMILARITY_THRESHOLD = 0.9;
 export const SEARCH_RADII = [8, 40, Infinity];
@@ -158,4 +159,40 @@ export function resolveLineFuzzy(
     if (!isFinite(R)) break; // whole-file ring already scanned
   }
   return centerLine;
+}
+
+// The raw comparison anchor for a line: its trimmed text. undefined for a
+// blank/whitespace-only line (no usable anchor). Counterpart of linePattern,
+// but un-escaped — fed to the fuzzy resolver.
+export function lineAnchorText(lineText: string): string | undefined {
+  const t = lineText.trim();
+  return t.length === 0 ? undefined : t;
+}
+
+const PATTERN_PREFIX = "^[^\\S\\n]*";
+
+// Recover the raw line text from a linePattern() regex (strip the leading-
+// whitespace prefix, then unescape the regex specials it escaped). Returns
+// undefined if the string isn't one of our patterns.
+export function patternToText(pattern: string): string | undefined {
+  if (!pattern.startsWith(PATTERN_PREFIX)) return undefined;
+  const body = pattern.slice(PATTERN_PREFIX.length);
+  return body.replace(/\\([.*+?^${}()|[\]\\])/g, "$1");
+}
+
+// One-time, idempotent: give every tag a `text` anchor. Tags that predate the
+// fuzzy model have only `pattern`; derive `text` from it so they get fuzzy
+// recovery immediately. `pattern` is left untouched (URL/legacy still use it).
+export function backfillAnchorText(store: LodestarStore): void {
+  const walk = (nodes: TreeNode[]): void => {
+    for (const node of nodes) {
+      if (node.type === "folder") {
+        walk(node.children);
+      } else if ((node as any).text === undefined && (node as any).pattern) {
+        const t = patternToText((node as any).pattern);
+        if (t !== undefined) (node as any).text = t;
+      }
+    }
+  };
+  walk(store.tree);
 }
