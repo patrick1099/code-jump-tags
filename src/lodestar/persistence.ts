@@ -4,6 +4,7 @@ import { STORE_DIRECTORY, STORE_FILE } from "../constants";
 import { store as runtime } from "../store";
 import { treeToAllTours, treeToTours } from "./adapter";
 import { createEmptyStore, migrateLooseTags, newFolderId, parse, serialize } from "./tree";
+import { backfillAnchorText } from "./relocate";
 import { LodestarStore } from "./types";
 
 let cache: LodestarStore = createEmptyStore();
@@ -47,6 +48,7 @@ export async function loadStore(): Promise<void> {
     }
   }
   migrateLooseTags(cache, newFolderId);
+  backfillAnchorText(cache);
   rebuildTours();
 }
 

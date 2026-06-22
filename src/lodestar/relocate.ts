@@ -168,6 +168,20 @@ export function lineAnchorText(lineText: string): string | undefined {
   return t.length === 0 ? undefined : t;
 }
 
+// Unified resolve for a tag/step: prefer the fuzzy text anchor, fall back to
+// the legacy regex pattern, else trust the stored line. One choke point for
+// every place that turns a stored line into a display line.
+export function resolveAnchoredLine(
+  text: string,
+  line: number,
+  anchorText?: string,
+  pattern?: string
+): number {
+  if (anchorText) return resolveLineFuzzy(text, line, anchorText);
+  if (pattern) return resolveLine(text, line, pattern);
+  return line;
+}
+
 const PATTERN_PREFIX = "^[^\\S\\n]*";
 
 // Recover the raw line text from a linePattern() regex (strip the leading-
