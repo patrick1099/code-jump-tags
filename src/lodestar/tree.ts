@@ -299,7 +299,27 @@ export function moveNode(
 ): void {
   const node = removeNode(store, id);
   if (!node) return;
+  // An inbox folder graduates (loses its inbox role) the moment it leaves the
+  // root for another folder. Reordering within the root keeps it the inbox.
+  if (node.type === "folder" && node.inbox && toParentId !== null) {
+    delete node.inbox;
+  }
   const target = toParentId ? childrenOf(store, toParentId) : store.tree;
   const clamped = Math.max(0, Math.min(index, target.length));
   target.splice(clamped, 0, node);
+}
+
+// Rename a folder. Renaming an inbox graduates it to a plain folder (its tags
+// stay; the next new tag lazily spawns a fresh inbox). Returns false if `id`
+// isn't a folder.
+export function renameFolderNode(
+  store: LodestarStore,
+  id: string,
+  title: string
+): boolean {
+  const found = findNode(store, id);
+  if (!found || found.node.type !== "folder") return false;
+  found.node.title = title;
+  if (found.node.inbox) delete found.node.inbox;
+  return true;
 }
