@@ -188,9 +188,9 @@ export function backfillAnchorText(store: LodestarStore): void {
     for (const node of nodes) {
       if (node.type === "folder") {
         walk(node.children);
-      } else if ((node as any).text === undefined && (node as any).pattern) {
-        const t = patternToText((node as any).pattern);
-        if (t !== undefined) (node as any).text = t;
+      } else if (node.text === undefined && node.pattern) {
+        const t = patternToText(node.pattern);
+        if (t !== undefined) node.text = t;
       }
     }
   };
