@@ -32,6 +32,22 @@ describe("getOrCreateInbox", () => {
     expect(first).toBe(second);
     expect(s.tree.filter(n => n.type === "folder" && (n as FolderNode).inbox)).toHaveLength(1);
   });
+
+  it("self-heals a duplicate inbox: keeps the first, graduates the rest", () => {
+    // Can arise from delete-inbox → new-tag spawns a fresh inbox → restore the
+    // old (still-flagged) inbox from the recycle bin. getOrCreateInbox must
+    // restore the at-most-one-inbox invariant by clearing extra flags.
+    seq = 0;
+    const s = createEmptyStore();
+    const older = folder("older", true);
+    const newer = folder("newer", true);
+    s.tree.push(older, newer);
+    const inbox = getOrCreateInbox(s, idGen);
+    expect(inbox).toBe(older);                 // first root inbox wins
+    expect(older.inbox).toBe(true);
+    expect(newer.inbox).toBeFalsy();           // graduated to a normal folder
+    expect(s.tree.filter(n => n.type === "folder" && (n as FolderNode).inbox)).toHaveLength(1);
+  });
 });
 
 function tag(id: string): TagNode {
