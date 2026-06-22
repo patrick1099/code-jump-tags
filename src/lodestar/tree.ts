@@ -8,6 +8,34 @@ import {
 
 const TRASH_LIMIT = 50;
 
+export const INBOX_TITLE = "未分组";
+
+export function newFolderId(): string {
+  return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+// The single new-tag inbox: the root-level folder flagged `inbox`. Returns it,
+// or lazily creates one at the TOP of the root (matching where the old
+// synthetic "(未分组)" group used to sit). At most one inbox ever exists.
+export function getOrCreateInbox(
+  store: LodestarStore,
+  idGen: () => string
+): FolderNode {
+  const existing = store.tree.find(
+    (n): n is FolderNode => n.type === "folder" && n.inbox === true
+  );
+  if (existing) return existing;
+  const inbox: FolderNode = {
+    type: "folder",
+    id: idGen(),
+    title: INBOX_TITLE,
+    inbox: true,
+    children: []
+  };
+  store.tree.unshift(inbox);
+  return inbox;
+}
+
 export function createEmptyStore(): LodestarStore {
   return { version: 1, tree: [] };
 }
