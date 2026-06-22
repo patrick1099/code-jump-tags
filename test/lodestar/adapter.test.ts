@@ -6,6 +6,7 @@ import {
   LOOSE_TITLE
 } from "../../src/lodestar/adapter";
 import { LodestarStore } from "../../src/lodestar/types";
+import { createEmptyStore } from "../../src/lodestar/tree";
 
 const store: LodestarStore = {
   version: 1,
@@ -21,17 +22,16 @@ const store: LodestarStore = {
 };
 
 describe("treeToTours", () => {
-  it("maps folders to tours and loose tags to a synthetic tour", () => {
+  it("maps only top-level folders to tours; root-level loose tags are ignored", () => {
     const tours = treeToTours(store, "ws");
-    // loose tour first
-    expect(tours[0].id).toBe("ws::" + LOOSE_TOUR_ID);
-    expect(tours[0].title).toBe(LOOSE_TITLE);
-    expect(tours[0].steps).toHaveLength(1);
-    expect(tours[0].steps[0]).toMatchObject({ id: "t0", description: "loose one", file: "a.c", line: 3 });
-    // folder tour
-    expect(tours[1].id).toBe("ws::f1");
-    expect(tours[1].title).toBe("通信");
-    expect(tours[1].steps[0]).toMatchObject({ id: "t1", description: "上报入口\n更多", file: "b.c", line: 10, pattern: "case X:" });
+    // only the folder tour — no synthetic loose group
+    expect(tours).toHaveLength(1);
+    expect(tours[0].id).toBe("ws::f1");
+    expect(tours[0].title).toBe("通信");
+    expect(tours[0].steps[0]).toMatchObject({ id: "t1", description: "上报入口\n更多", file: "b.c", line: 10, pattern: "case X:" });
+    // LOOSE_TOUR_ID / LOOSE_TITLE constants still exported but no longer used for synthesis
+    expect(tours.some(t => t.id.endsWith(LOOSE_TOUR_ID))).toBe(false);
+    expect(tours.some(t => t.title === LOOSE_TITLE)).toBe(false);
   });
 
   it("omits the loose tour when there are no loose tags", () => {
@@ -65,7 +65,7 @@ describe("treeToTours", () => {
     expect(tours[0].steps.map(s => s.id)).toEqual(["t1"]);
   });
 
-  it("treeToAllTours flattens tags from EVERY nesting depth (decoration source)", () => {
+  it("treeToAllTours flattens tags from EVERY folder depth (decoration source); root-level loose tags excluded", () => {
     const nested: LodestarStore = {
       version: 1,
       tree: [
@@ -87,6 +87,27 @@ describe("treeToTours", () => {
     const allIds = treeToAllTours(nested, "ws")
       .flatMap(t => t.steps.map(s => s.id))
       .sort();
-    expect(allIds).toEqual(["t0", "t1", "t2"]);
+    // t0 is a root-level loose tag — no longer surfaced by treeToAllTours
+    expect(allIds).toEqual(["t1", "t2"]);
+  });
+});
+
+describe("no synthetic loose group", () => {
+  it("treeToTours ignores root-level loose tags (emits only folder tours)", () => {
+    const s = createEmptyStore();
+    s.tree.push({ type: "tag", id: "t1", note: "n", file: "a.c", line: 1, createdAt: "t" });
+    s.tree.push({ type: "folder", id: "f1", title: "通信", children: [] });
+    const tours = treeToTours(s, "ws");
+    expect(tours).toHaveLength(1);
+    expect(tours[0].id).toBe("ws::f1");
+    expect(tours.some(t => t.id.endsWith("__loose__"))).toBe(false);
+    expect(tours.some(t => t.title === "(未分组)")).toBe(false);
+  });
+
+  it("treeToAllTours emits no loose group", () => {
+    const s = createEmptyStore();
+    s.tree.push({ type: "tag", id: "t1", note: "n", file: "a.c", line: 1, createdAt: "t" });
+    const all = treeToAllTours(s, "ws");
+    expect(all.some(t => t.id.endsWith("__loose__"))).toBe(false);
   });
 });
