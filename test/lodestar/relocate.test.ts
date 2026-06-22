@@ -51,7 +51,6 @@ describe("linePattern", () => {
 });
 
 describe("reanchorTag (persisted live re-anchoring)", () => {
-  // insert n blank lines at the START of 0-based `line`
   const ins = (line: number, n: number): LineEdit => ({
     start: line,
     end: line,
@@ -59,39 +58,60 @@ describe("reanchorTag (persisted live re-anchoring)", () => {
     delta: n
   });
 
-  it("shifts the line down when lines are inserted above, keeping the anchor", () => {
+  it("shifts the line down when lines are inserted above, refreshing both anchors", () => {
     const text = ["a", "b", "c", "d", "  doThing();", "f"].join("\n");
-    const pat = linePattern("  doThing();");
-    const after = reanchorTag(text, { line: 2, pattern: pat }, [ins(0, 3)]);
+    const after = reanchorTag(text, { line: 2, text: "doThing();" }, [ins(0, 3)]);
     expect(after.line).toBe(5);
-    expect(after.pattern).toBe(pat);
+    expect(after.text).toBe("doThing();");
+    expect(after.pattern).toBe(linePattern("  doThing();"));
   });
 
-  it("recovers the true line by content when the incremental shift is wrong (file overwrite)", () => {
+  it("recovers the true line by FUZZY content when the incremental shift is wrong", () => {
     const lines = Array.from({ length: 36 }, (_, i) => `line${i + 1}`);
     lines[34] = "  OverFlowEnable;"; // 1-based line 35
     const text = lines.join("\n");
-    const pat = linePattern("  OverFlowEnable;");
-    // stored line is stale (29); a whole-document replace doesn't shift it,
-    // so only content recovery can find the real line.
-    const after = reanchorTag(text, { line: 29, pattern: pat }, [
+    const after = reanchorTag(text, { line: 29, text: "OverFlowEnable;" }, [
       { start: 0, end: 33, endChar: 0, delta: 6 }
     ]);
     expect(after.line).toBe(35);
   });
 
-  it("refreshes the anchor to the line's new text so the next recovery stays accurate", () => {
+  it("refreshes the text anchor to the line's new content", () => {
     const text = ["x", "  newName();", "y"].join("\n");
-    const stale = linePattern("  oldName();");
-    const after = reanchorTag(text, { line: 2, pattern: stale }, []);
+    const after = reanchorTag(text, { line: 2, text: "newName();" }, []);
     expect(after.line).toBe(2);
-    expect(after.pattern).toBe(linePattern("  newName();"));
+    expect(after.text).toBe("newName();");
   });
 
-  it("tracks by line number alone when the tag has no pattern", () => {
+  it("falls back to legacy regex pattern when the tag has no text", () => {
+    const lines = Array.from({ length: 36 }, (_, i) => `line${i + 1}`);
+    lines[34] = "  OverFlowEnable;";
+    const text = lines.join("\n");
+    const pat = linePattern("  OverFlowEnable;");
+    const after = reanchorTag(text, { line: 29, pattern: pat }, [
+      { start: 0, end: 33, endChar: 0, delta: 6 }
+    ]);
+    expect(after.line).toBe(35);
+    expect(after.text).toBe("OverFlowEnable;"); // refreshed from the resolved line
+  });
+
+  it("tracks by line number alone when the tag has neither text nor pattern", () => {
     const text = ["a", "b", "  x();", "d"].join("\n");
-    const after = reanchorTag(text, { line: 1, pattern: undefined }, [ins(0, 2)]);
+    const after = reanchorTag(text, { line: 1 }, [ins(0, 2)]);
     expect(after.line).toBe(3);
+  });
+
+  it("a mid-line split keeps the tag on the upper half and re-anchors to it", () => {
+    // line 2 "if (a > b) { foo(); }" split after "{" -> upper "if (a > b) {"
+    const text = ["void a(){", "if (a > b) {", "foo(); }", "}"].join("\n");
+    // emulate the split edit: a newline inserted mid-line on line index 1
+    const after = reanchorTag(
+      text,
+      { line: 2, text: "if (a > b) { foo(); }" },
+      [{ start: 1, end: 1, endChar: 12, delta: 1 }]
+    );
+    expect(after.line).toBe(2);            // stays on the upper half
+    expect(after.text).toBe("if (a > b) {"); // re-anchored to the upper half
   });
 });
 

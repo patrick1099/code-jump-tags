@@ -36,39 +36,38 @@ export function similarity(a: string, b: string): number {
   return 1 - dist / Math.max(n, m);
 }
 
-// A tag's position anchor: 1-based line plus its optional content pattern.
+// A tag's position anchor: 1-based line plus optional recovery anchors.
+// `text` (raw line text) drives fuzzy recovery; `pattern` (regex) is kept for
+// the URL deep-link / legacy step layer and as a fallback for un-migrated tags.
 export interface TagAnchor {
   line: number;
+  text?: string;
   pattern?: string;
 }
 
-// Re-anchor a tag after a document change. Combines both tracking strategies:
-//  1. shift the stored line by the incremental edits (exact, and correct even
-//     for duplicate lines), then
-//  2. if the tag has a content pattern, let resolveLine override that guess —
-//     it trusts the shifted line when the pattern still matches there, but
-//     searches the whole file otherwise. This is what recovers a tag after a
-//     wholesale overwrite, where the incremental shift can't know where the
-//     line went.
-// Finally the anchor pattern is refreshed from the resolved line's current text
-// so future content recovery stays accurate (a blank line keeps the old anchor).
+// Re-anchor a tag after a document change. (1) shift the stored line by the
+// incremental edits, then (2) let content recovery override that guess: fuzzy
+// on `text` when present, else the legacy regex on `pattern`. Finally refresh
+// BOTH anchors from the resolved line's current text so neither goes stale.
 export function reanchorTag(
   text: string,
   anchor: TagAnchor,
   edits: LineEdit[]
 ): TagAnchor {
-  const shifted0 = shiftedLine(anchor.line - 1, edits);
-  const resolved1 = anchor.pattern
-    ? resolveLine(text, shifted0 + 1, anchor.pattern)
-    : shifted0 + 1;
+  const shifted1 = shiftedLine(anchor.line - 1, edits) + 1;
+  const resolved1 = anchor.text
+    ? resolveLineFuzzy(text, shifted1, anchor.text)
+    : resolveLine(text, shifted1, anchor.pattern);
   const line = Math.max(1, resolved1);
 
   const lines = text.split(/\r?\n/);
   const current = lines[line - 1];
-  const pattern =
+  const newText =
+    current !== undefined ? lineAnchorText(current) ?? anchor.text : anchor.text;
+  const newPattern =
     current !== undefined ? linePattern(current) ?? anchor.pattern : anchor.pattern;
 
-  return { line, pattern };
+  return { line, text: newText, pattern: newPattern };
 }
 
 // Build the drift-recovery pattern for a line from its raw text. Anchors at the
