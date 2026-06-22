@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveLine, linePattern, reanchorTag } from "../../src/lodestar/relocate";
+import { resolveLine, linePattern, reanchorTag, normalizeWs, similarity } from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
 
 const text = ["void a(){", "  doThing();", "}", "", "case SU_RepeatMode:"].join("\n");
@@ -81,5 +81,29 @@ describe("reanchorTag (persisted live re-anchoring)", () => {
     const text = ["a", "b", "  x();", "d"].join("\n");
     const after = reanchorTag(text, { line: 1, pattern: undefined }, [ins(0, 2)]);
     expect(after.line).toBe(3);
+  });
+});
+
+describe("normalizeWs", () => {
+  it("trims ends and collapses internal whitespace runs", () => {
+    expect(normalizeWs("  if  (a >  b) {\t}  ")).toBe("if (a > b) { }");
+  });
+  it("maps blank/whitespace-only to empty string", () => {
+    expect(normalizeWs("   \t ")).toBe("");
+    expect(normalizeWs("")).toBe("");
+  });
+});
+
+describe("similarity", () => {
+  it("is 1 for identical strings and for two empties", () => {
+    expect(similarity("foo()", "foo()")).toBe(1);
+    expect(similarity("", "")).toBe(1);
+  });
+  it("tolerates a one-char insertion on a ~10-char line (>=0.9)", () => {
+    // "if (a > b)" -> "if (a > b);" : 1 edit over length 11
+    expect(similarity("if (a > b)", "if (a > b);")).toBeGreaterThanOrEqual(0.9);
+  });
+  it("is low for unrelated strings", () => {
+    expect(similarity("alpha();", "return 0;")).toBeLessThan(0.5);
   });
 });
