@@ -146,4 +146,21 @@ describe("resolveLineFuzzy", () => {
     const text = ["aaa", "bbb", "ccc"].join("\n");
     expect(resolveLineFuzzy(text, 2, "zzzzzzzzzz")).toBe(2);
   });
+
+  it("ring search picks the NEAR fuzzy line over a FAR exact duplicate (RC2, center stale)", () => {
+    // Center is STALE so the fast path does NOT fire and the ring search runs.
+    // The near edited line (ring 8, fuzzy ~0.92) must beat the far EXACT
+    // duplicate (distance > 40), even though exact (1.0) > fuzzy — distance wins.
+    const lines = Array.from({ length: 80 }, (_, i) => `pad_line_number_${i}`);
+    lines[9] = "stale center line zzz"; // 1-based line 10 = center, NOT a match
+    lines[12] = "  if (a > b) {;";       // 1-based line 13, near (dist 3), fuzzy ~0.92
+    lines[60] = "if (a > b) {";          // 1-based line 61, far (dist 51), EXACT
+    const text = lines.join("\n");
+    expect(resolveLineFuzzy(text, 10, "if (a > b) {")).toBe(13);
+  });
+
+  it("returns center for a whitespace-only anchor", () => {
+    const text = ["a", "b", "c"].join("\n");
+    expect(resolveLineFuzzy(text, 2, "   ")).toBe(2);
+  });
 });
