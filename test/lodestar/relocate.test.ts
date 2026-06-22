@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { resolveLine, linePattern, reanchorTag, normalizeWs, similarity, resolveLineFuzzy } from "../../src/lodestar/relocate";
+import {
+  resolveLine,
+  linePattern,
+  reanchorTag,
+  normalizeWs,
+  similarity,
+  resolveLineFuzzy,
+  lineAnchorText,
+  patternToText,
+  backfillAnchorText
+} from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
+import { LodestarStore } from "../../src/lodestar/types";
 
 const text = ["void a(){", "  doThing();", "}", "", "case SU_RepeatMode:"].join("\n");
 
@@ -162,5 +173,54 @@ describe("resolveLineFuzzy", () => {
   it("returns center for a whitespace-only anchor", () => {
     const text = ["a", "b", "c"].join("\n");
     expect(resolveLineFuzzy(text, 2, "   ")).toBe(2);
+  });
+});
+
+describe("lineAnchorText", () => {
+  it("returns the trimmed text, undefined for blank", () => {
+    expect(lineAnchorText("   foo(a, b);  ")).toBe("foo(a, b);");
+    expect(lineAnchorText("   \t")).toBeUndefined();
+  });
+});
+
+describe("patternToText", () => {
+  it("reverses linePattern: strips the prefix and unescapes specials", () => {
+    const original = "if (a[0] > b) { c(); }";
+    const pat = linePattern("    " + original)!;
+    expect(patternToText(pat)).toBe(original);
+  });
+  it("returns undefined for a pattern without the known prefix", () => {
+    expect(patternToText("something_else")).toBeUndefined();
+  });
+});
+
+describe("backfillAnchorText", () => {
+  it("derives text from pattern for tags missing text, keeps pattern", () => {
+    const pat = linePattern("  unsigned char OverFlowEnable;")!;
+    const store: LodestarStore = {
+      version: 1,
+      tree: [
+        {
+          type: "folder",
+          id: "f1",
+          title: "F",
+          children: [
+            { type: "tag", id: "t1", note: "n", file: "a.c", line: 3, pattern: pat, createdAt: "x" }
+          ]
+        }
+      ]
+    };
+    backfillAnchorText(store);
+    const tag = (store.tree[0] as any).children[0];
+    expect(tag.text).toBe("unsigned char OverFlowEnable;");
+    expect(tag.pattern).toBe(pat); // unchanged
+  });
+  it("leaves a tag that already has text untouched", () => {
+    const store: LodestarStore = {
+      version: 1,
+      tree: [{ type: "tag", id: "t1", note: "n", file: "a.c", line: 1, text: "keep", pattern: "p", createdAt: "x" } as any]
+    };
+    backfillAnchorText(store);
+    expect((store.tree[0] as any).text).toBe("keep");
   });
 });
