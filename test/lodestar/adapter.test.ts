@@ -3,9 +3,10 @@ import {
   treeToTours,
   treeToAllTours,
   LOOSE_TOUR_ID,
-  LOOSE_TITLE
+  LOOSE_TITLE,
+  folderToTour
 } from "../../src/lodestar/adapter";
-import { LodestarStore } from "../../src/lodestar/types";
+import { LodestarStore, FolderNode } from "../../src/lodestar/types";
 import { createEmptyStore } from "../../src/lodestar/tree";
 
 const store: LodestarStore = {
@@ -89,6 +90,21 @@ describe("treeToTours", () => {
       .sort();
     // t0 is a root-level loose tag — no longer surfaced by treeToAllTours
     expect(allIds).toEqual(["t1", "t2"]);
+  });
+});
+
+describe("tagToStep text passthrough", () => {
+  it("copies tag.text onto the derived step", () => {
+    const folder: FolderNode = {
+      type: "folder",
+      id: "f1",
+      title: "F",
+      children: [
+        { type: "tag", id: "t1", note: "n", file: "a.c", line: 2, text: "foo();", createdAt: "x" }
+      ]
+    };
+    const tour = folderToTour(folder, "ws");
+    expect(tour.steps[0].text).toBe("foo();");
   });
 });
 

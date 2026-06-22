@@ -6,7 +6,8 @@ export interface TagNode {
   note: string;        // annotation text (markdown allowed); label uses first line
   file: string;        // workspace-relative path
   line: number;        // 1-based
-  pattern?: string;    // line-content regex for drift recovery
+  pattern?: string;    // line-content regex for drift recovery (URL/legacy)
+  text?: string;       // raw trimmed line text — anchor for fuzzy recovery
   ref?: string | null; // reserved: pin to a commit/branch later
   createdAt: string;   // ISO timestamp
   notePosition?: "above" | "end"; // per-tag note placement; unset => "above"

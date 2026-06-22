@@ -34,6 +34,7 @@ export interface CodeTourStep {
   commands?: string[];
 
   pattern?: string;
+  text?: string; // Code Jump Tags: raw line text anchor for fuzzy recovery
   markerTitle?: string;
   notePosition?: "above" | "end"; // Code Jump Tags: per-tag note placement
 }
