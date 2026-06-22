@@ -27,46 +27,26 @@ export function folderToTour(folder: FolderNode, workspaceId: string): CodeTour 
 }
 
 // One-way: build the derived CodeTour[] cache from the on-disk tree. Only the
-// TOP-LEVEL folders become tours here (plus the loose "(未分组)" group). This
-// feeds the tree roots and the tour pickers, which must not surface a nested
-// sub-folder as a top-level playable tour. Sub-folders are rendered by the tree
-// provider's recursive getChildren, and their tags are decorated via
-// treeToAllTours below.
+// TOP-LEVEL folders become tours here. Root-level loose tags are ignored —
+// migration wraps them into a real inbox folder. This feeds the tree roots and
+// the tour pickers, which must not surface a nested sub-folder as a top-level
+// playable tour. Sub-folders are rendered by the tree provider's recursive
+// getChildren, and their tags are decorated via treeToAllTours below.
 export function treeToTours(store: LodestarStore, workspaceId: string): CodeTour[] {
-  const looseTags = store.tree.filter((n): n is TagNode => n.type === "tag");
   const folders = store.tree.filter((n): n is FolderNode => n.type === "folder");
-
-  const tours: CodeTour[] = [];
-  if (looseTags.length > 0) {
-    tours.push({
-      id: `${workspaceId}::${LOOSE_TOUR_ID}`,
-      title: LOOSE_TITLE,
-      steps: looseTags.map(tagToStep)
-    });
-  }
-  tours.push(...folders.map(f => folderToTour(f, workspaceId)));
-  return tours;
+  return folders.map(f => folderToTour(f, workspaceId));
 }
 
 // Every folder at ANY depth becomes its own tour (holding that folder's direct
-// tags), plus the loose top-level "(未分组)" group. The union covers every tag
-// in the tree regardless of nesting, so editor decorations / CodeLenses mark
-// tags inside sub-folders too. Used only as the decoration source — never as
-// tree roots or pickable tours.
+// tags). Root-level loose tags are ignored — the inbox folder holds them after
+// migration. The union of folder tours covers every tag reachable from a folder,
+// so editor decorations / CodeLenses mark tags inside sub-folders too. Used only
+// as the decoration source — never as tree roots or pickable tours.
 export function treeToAllTours(
   store: LodestarStore,
   workspaceId: string
 ): CodeTour[] {
   const tours: CodeTour[] = [];
-
-  const looseTags = store.tree.filter((n): n is TagNode => n.type === "tag");
-  if (looseTags.length > 0) {
-    tours.push({
-      id: `${workspaceId}::${LOOSE_TOUR_ID}`,
-      title: LOOSE_TITLE,
-      steps: looseTags.map(tagToStep)
-    });
-  }
 
   function walk(nodes: (FolderNode | TagNode)[]): void {
     for (const node of nodes) {
