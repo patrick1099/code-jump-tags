@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
 import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
 import { findNode, LineEdit } from "../lodestar/tree";
-import { reanchorTag, resolveLine } from "../lodestar/relocate";
+import { reanchorTag, resolveAnchoredLine } from "../lodestar/relocate";
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
@@ -62,7 +62,7 @@ export async function getTourSteps(
           // reload (the stored line goes stale, but the line's text is found
           // again). This is the SAME recovery the jump command uses, so the
           // marker and the jump target always agree.
-          line = resolveLine(contents, step.line, step.pattern) - 1;
+          line = resolveAnchoredLine(contents, step.line, step.text, step.pattern) - 1;
         } else if (step.pattern) {
           const match = contents.match(new RegExp(step.pattern, "m"));
           if (match) {
@@ -199,10 +199,19 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
     // Re-anchor: shift by the edit, let content recovery override a wrong guess
     // (overwrite case), and refresh the anchor pattern from the new line text so
     // the stored anchor never goes stale. Persist BOTH line and pattern.
-    const after = reanchorTag(text, { line: node.line, pattern: node.pattern }, edits);
-    if (after.line !== node.line || after.pattern !== node.pattern) {
+    const after = reanchorTag(
+      text,
+      { line: node.line, text: node.text, pattern: node.pattern },
+      edits
+    );
+    if (
+      after.line !== node.line ||
+      after.pattern !== node.pattern ||
+      after.text !== node.text
+    ) {
       node.line = after.line;
       node.pattern = after.pattern;
+      node.text = after.text;
       changed++;
     }
   }

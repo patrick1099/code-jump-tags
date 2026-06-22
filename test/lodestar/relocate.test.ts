@@ -8,7 +8,8 @@ import {
   resolveLineFuzzy,
   lineAnchorText,
   patternToText,
-  backfillAnchorText
+  backfillAnchorText,
+  resolveAnchoredLine
 } from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
 import { LodestarStore } from "../../src/lodestar/types";
@@ -242,5 +243,18 @@ describe("backfillAnchorText", () => {
     };
     backfillAnchorText(store);
     expect((store.tree[0] as any).text).toBe("keep");
+  });
+});
+
+describe("resolveAnchoredLine", () => {
+  const text = ["void a(){", "  doThing();", "}", "", "uniqueXYZ();"].join("\n");
+  it("uses fuzzy text anchor when present", () => {
+    expect(resolveAnchoredLine(text, 2, "uniqueXYZ();")).toBe(5);
+  });
+  it("falls back to regex pattern when no text", () => {
+    expect(resolveAnchoredLine(text, 2, undefined, "uniqueXYZ\\(\\);")).toBe(5);
+  });
+  it("returns the line when neither anchor is given", () => {
+    expect(resolveAnchoredLine(text, 3)).toBe(3);
   });
 });

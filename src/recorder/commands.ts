@@ -25,7 +25,7 @@ import {
   getOrCreateInbox,
   newFolderId
 } from "../lodestar/tree";
-import { linePattern } from "../lodestar/relocate";
+import { linePattern, lineAnchorText } from "../lodestar/relocate";
 import { TagNode } from "../lodestar/types";
 
 export async function saveTour(tour: CodeTour) {
@@ -392,6 +392,7 @@ export function registerRecorderCommands() {
         lineText = threadEditor.document.lineAt(lineIndex).text.trim();
       }
       const pattern = lineText ? linePattern(lineText) : undefined;
+      const text = lineText ? lineAnchorText(lineText) : undefined;
 
       // Dismiss the native editing bubble on the NEXT tick. Disposing the thread
       // synchronously inside its own reply handler wedges VS Code's comment
@@ -433,6 +434,7 @@ export function registerRecorderCommands() {
         file,
         line,
         pattern,
+        text,
         createdAt: new Date().toISOString()
       };
       const inbox = getOrCreateInbox(getStore(), newFolderId);

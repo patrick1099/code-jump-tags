@@ -13,7 +13,7 @@ import {
   NOTE_INPUT_PROMPT
 } from "../constants";
 import { getStore, saveStore } from "./persistence";
-import { resolveLine } from "./relocate";
+import { resolveAnchoredLine } from "./relocate";
 import { findNode, removeToTrash } from "./tree";
 
 let controller: vscode.CommentController | undefined;
@@ -103,7 +103,7 @@ export async function openTagEditor(tagId: string) {
   const root = vscode.workspace.workspaceFolders![0].uri;
   const uri = vscode.Uri.joinPath(root, tag.file);
   const doc = await vscode.workspace.openTextDocument(uri);
-  const resolved = resolveLine(doc.getText(), tag.line, tag.pattern);
+  const resolved = resolveAnchoredLine(doc.getText(), tag.line, tag.text, tag.pattern);
   const lineIdx = Math.max(0, resolved - 1);
   await vscode.window.showTextDocument(doc, { preview: false });
 
