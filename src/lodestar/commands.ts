@@ -15,7 +15,6 @@ import {
 import { AMBIENT_TOUR_ID, EXTENSION_NAME } from "../constants";
 import { store as runtime } from "../store";
 import { endCurrentCodeTour, startCodeTour } from "../store/actions";
-import { LOOSE_TOUR_ID } from "./adapter";
 import {
   closeTagEditor,
   openTagEditor,
@@ -30,6 +29,7 @@ import {
   createFolder,
   findNode,
   removeToTrash,
+  renameFolderNode,
   restoreSelection
 } from "./tree";
 import { TreeNode, TrashedEntry } from "./types";
@@ -200,15 +200,12 @@ export async function copyFolderLinks(node: any) {
   window.setStatusBarMessage(`Code Jump Tags: 已复制 ${links.length} 条链接`, 2000);
 }
 
-// Rename a folder. The synthetic "(未分组)" group can't be renamed.
+// Rename a folder. The inbox is a real folder and can be renamed (graduation).
 export async function renameFolder(node: any) {
   const tourId: string | undefined = node?.tour?.id;
   const folderId = tourId ? tourId.split("::")[1] : undefined;
-  if (!folderId || folderId === LOOSE_TOUR_ID) {
-    window.showInformationMessage("Code Jump Tags:「(未分组)」无法重命名");
-    return;
-  }
-  const found = findNode(getStore(), folderId);
+  const store = getStore();
+  const found = folderId ? findNode(store, folderId) : undefined;
   if (!found || found.node.type !== "folder") {
     window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
     return;
@@ -218,7 +215,7 @@ export async function renameFolder(node: any) {
     value: found.node.title
   });
   if (title === undefined || title.trim() === "") return;
-  found.node.title = title.trim();
+  renameFolderNode(store, folderId!, title.trim());
   await saveStore();
 }
 
@@ -261,20 +258,12 @@ export async function editNote(tagId?: string) {
 }
 
 // Delete a folder (and the tags inside it) from the store. Invoked from the
-// tree's folder node. The synthetic "(未分组)" group isn't a real folder, so
-// it can't be deleted.
+// tree's folder node.
 export async function deleteFolder(node: any) {
   const tourId: string | undefined = node?.tour?.id;
   const folderId = tourId ? tourId.split("::")[1] : undefined;
-  if (!folderId || folderId === LOOSE_TOUR_ID) {
-    window.showInformationMessage(
-      "Code Jump Tags:「(未分组)」不是真实文件夹,无法删除"
-    );
-    return;
-  }
-
   const store = getStore();
-  const found = findNode(store, folderId);
+  const found = folderId ? findNode(store, folderId) : undefined;
   if (!found || found.node.type !== "folder") {
     window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
     return;
@@ -288,7 +277,7 @@ export async function deleteFolder(node: any) {
   );
   if (!ok) return;
 
-  removeToTrash(store, folderId);
+  removeToTrash(store, folderId!);
   await saveStore();
   // A deleted folder takes its child tags with it; close any open edit bubble so
   // it doesn't outlive the tag it was editing.
@@ -448,19 +437,12 @@ export async function newFolder() {
   await saveStore();
 }
 
-// Create a sub-folder inside the right-clicked folder. The synthetic "(未分组)"
-// group isn't a real folder, so it can't hold sub-folders. Folders nest to any
+// Create a sub-folder inside the right-clicked folder. Folders nest to any
 // depth; the tree renders the nesting and findNode/moveNode already recurse.
 export async function newSubfolder(node: any) {
   const tourId: string | undefined = node?.tour?.id;
   const folderId = tourId ? tourId.split("::").pop() : undefined;
-  if (!folderId || folderId === LOOSE_TOUR_ID) {
-    window.showInformationMessage(
-      "Code Jump Tags:「(未分组)」里不能新建子文件夹"
-    );
-    return;
-  }
-  const found = findNode(getStore(), folderId);
+  const found = folderId ? findNode(getStore(), folderId) : undefined;
   if (!found || found.node.type !== "folder") {
     window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
     return;
