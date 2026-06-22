@@ -43,7 +43,7 @@ class CodeTourTreeProvider
         if (s instanceof CodeTourStepNode) return s.step?.id;
         if (s instanceof CodeTourNode) {
           const folderId = s.tour.id.split("::").pop();
-          return folderId && folderId !== "__loose__" ? folderId : undefined;
+          return folderId || undefined;
         }
         return undefined;
       })
@@ -59,17 +59,14 @@ class CodeTourTreeProvider
     if (!item) return;
     const ids: string[] = item.value;
     const { getStore, saveStore } = await import("../../lodestar/persistence");
-    const { moveNode, findNode, isSelfOrDescendant } = await import(
-      "../../lodestar/tree"
-    );
+    const { moveNode, findNode, isSelfOrDescendant, getOrCreateInbox, newFolderId } =
+      await import("../../lodestar/tree");
     const store = getStore();
 
-    // No target == dropped on empty space == move to the root.
     let toParentId: string | null = null;
     let index = Number.MAX_SAFE_INTEGER;
     if (target instanceof CodeTourNode) {
-      const folderId = target.tour.id.split("::").pop()!;
-      toParentId = folderId === "__loose__" ? null : folderId;
+      toParentId = target.tour.id.split("::").pop()!;
     } else if (target instanceof CodeTourStepNode && target.step?.id) {
       const found = findNode(store, target.step.id);
       if (found) {
@@ -78,10 +75,18 @@ class CodeTourTreeProvider
       }
     }
     for (const id of ids) {
-      // Never drop a folder into itself or one of its own descendants — that
-      // would orphan the moved subtree.
-      if (toParentId && isSelfOrDescendant(store, id, toParentId)) continue;
-      moveNode(store, id, toParentId, index);
+      let dest = toParentId;
+      // Dropping a TAG on empty space lands it in the inbox (there are no
+      // root-level loose tags anymore). A folder dropped on empty space stays
+      // at the root.
+      if (dest === null && target === undefined) {
+        const node = findNode(store, id);
+        if (node && node.node.type === "tag") {
+          dest = getOrCreateInbox(store, newFolderId).id;
+        }
+      }
+      if (dest && isSelfOrDescendant(store, id, dest)) continue;
+      moveNode(store, id, dest, index);
     }
     await saveStore();
   }
@@ -181,7 +186,7 @@ class CodeTourTreeProvider
   // dynamic imports to avoid a load-time cycle with the lodestar layer.
   private async subfolderNodesOf(node: CodeTourNode): Promise<TreeItem[]> {
     const folderId = node.tour.id.split("::").pop();
-    if (!folderId || folderId === "__loose__") return [];
+    if (!folderId) return [];
     const { getStore, getWorkspaceId } = await import(
       "../../lodestar/persistence"
     );
@@ -205,7 +210,7 @@ class CodeTourTreeProvider
     // so reveal can expand the chain for nested tags.
     if (element instanceof CodeTourNode) {
       const folderId = element.tour.id.split("::").pop();
-      if (folderId && folderId !== "__loose__") {
+      if (folderId) {
         const { getStore, getWorkspaceId } = await import(
           "../../lodestar/persistence"
         );
