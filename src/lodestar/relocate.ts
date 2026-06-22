@@ -111,3 +111,51 @@ export function resolveLine(text: string, line: number, pattern?: string): numbe
 
   return line;
 }
+
+// Distance-first fuzzy line resolver (the recovery layer for changes we did
+// NOT witness live — reopen after external/git edits). 1-based in/out.
+// Trusts the center (incrementally-tracked) line whenever it still clears the
+// similarity bar; otherwise searches outward in concentric rings, so a NEAR
+// fuzzy match wins over a FAR exact duplicate (e.g. a #if-0 macro twin).
+export function resolveLineFuzzy(
+  text: string,
+  centerLine: number,
+  anchorText?: string
+): number {
+  if (!anchorText) return centerLine;
+  const target = normalizeWs(anchorText);
+  if (target.length === 0) return centerLine;
+
+  const lines = text.split(/\r?\n/);
+  const center0 = centerLine - 1;
+  const simAt = (i: number): number => {
+    const l = lines[i];
+    return l === undefined ? -1 : similarity(normalizeWs(l), target);
+  };
+
+  // Fast path: incremental tracking already put us on a good line.
+  if (center0 >= 0 && center0 < lines.length && simAt(center0) >= SIMILARITY_THRESHOLD) {
+    return centerLine;
+  }
+
+  for (const R of SEARCH_RADII) {
+    const lo = Math.max(0, center0 - R);
+    const hi = Math.min(lines.length - 1, center0 + R);
+    let best = -1;
+    let bestSim = -1;
+    let bestDist = Infinity;
+    for (let i = lo; i <= hi; i++) {
+      const s = simAt(i);
+      if (s < SIMILARITY_THRESHOLD) continue;
+      const d = Math.abs(i - center0);
+      if (s > bestSim || (s === bestSim && d < bestDist)) {
+        best = i;
+        bestSim = s;
+        bestDist = d;
+      }
+    }
+    if (best >= 0) return best + 1;
+    if (!isFinite(R)) break; // whole-file ring already scanned
+  }
+  return centerLine;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveLine, linePattern, reanchorTag, normalizeWs, similarity } from "../../src/lodestar/relocate";
+import { resolveLine, linePattern, reanchorTag, normalizeWs, similarity, resolveLineFuzzy } from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
 
 const text = ["void a(){", "  doThing();", "}", "", "case SU_RepeatMode:"].join("\n");
@@ -105,5 +105,45 @@ describe("similarity", () => {
   });
   it("is low for unrelated strings", () => {
     expect(similarity("alpha();", "return 0;")).toBeLessThan(0.5);
+  });
+});
+
+describe("resolveLineFuzzy", () => {
+  it("returns center when anchorText is empty", () => {
+    const text = ["a", "b", "c"].join("\n");
+    expect(resolveLineFuzzy(text, 2)).toBe(2);
+  });
+
+  it("keeps center when the center line still matches (exact)", () => {
+    const text = ["void a(){", "  doThing();", "}"].join("\n");
+    expect(resolveLineFuzzy(text, 2, "doThing();")).toBe(2);
+  });
+
+  it("keeps center when the center line drifted only a little (fuzzy >=0.9)", () => {
+    const text = ["void a(){", "  doThing(x);", "}"].join("\n");
+    // anchor is the old text "doThing();" — center now "doThing(x);"
+    expect(resolveLineFuzzy(text, 2, "doThing();")).toBe(2);
+  });
+
+  it("prefers the NEAR fuzzy line over a FAR exact duplicate (macro twin)", () => {
+    // line 2 (near, edited -> fuzzy ~0.9) vs line 40 (exact old text).
+    const lines = Array.from({ length: 45 }, (_, i) => `pad${i}`);
+    lines[1] = "  if (a > b) {;"; // 1-based line 2, near center, fuzzy
+    lines[39] = "if (a > b) {";   // 1-based line 40, far, EXACT old text
+    const text = lines.join("\n");
+    expect(resolveLineFuzzy(text, 2, "if (a > b) {")).toBe(2);
+  });
+
+  it("relocates to the nearest matching line when center drifted out", () => {
+    const lines = Array.from({ length: 12 }, (_, i) => `x${i}`);
+    lines[6] = "  uniqueAnchorToken();"; // 1-based line 7
+    const text = lines.join("\n");
+    // stored center stale at 4; nearest (only) match is line 7
+    expect(resolveLineFuzzy(text, 4, "uniqueAnchorToken();")).toBe(7);
+  });
+
+  it("stays put when nothing in the whole file clears the threshold", () => {
+    const text = ["aaa", "bbb", "ccc"].join("\n");
+    expect(resolveLineFuzzy(text, 2, "zzzzzzzzzz")).toBe(2);
   });
 });
