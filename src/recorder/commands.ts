@@ -790,11 +790,9 @@ export function registerRecorderCommands() {
       // Code Jump Tags: a tree tag node carries a Lodestar tag id; route those to
       // the store (with confirm + recycle bin) instead of mutating the cache.
       if ((node as any)?.step?.id) {
-        const { getStore, saveStore } = await import("../lodestar/persistence");
-        const { removeToTrash, findNode } = await import("../lodestar/tree");
+        const { getStore } = await import("../lodestar/persistence");
         const { pruneCovered } = await import("../lodestar/selection");
-        const { confirmDelete } = await import("../lodestar/commands");
-        const { closeTagEditor } = await import("../lodestar/editThread");
+        const { batchDeleteByIds } = await import("../lodestar/commands");
         const store = getStore();
 
         const idOf = (n: any): string | undefined =>
@@ -807,28 +805,7 @@ export function registerRecorderCommands() {
           selected.map(idOf).filter((x): x is string => !!x)
         );
         if (ids.length === 0) return;
-
-        let tagCount = 0;
-        let folderCount = 0;
-        for (const id of ids) {
-          const f = findNode(store, id);
-          if (f?.node.type === "folder") folderCount++;
-          else tagCount++;
-        }
-        const parts: string[] = [];
-        if (tagCount) parts.push(`${tagCount} 个标签`);
-        if (folderCount) parts.push(`${folderCount} 个文件夹(及其中的标签)`);
-        const summary =
-          ids.length === 1 && tagCount === 1
-            ? `删除标签「${((node as CodeTourStepNode).step!.description || "").split(/\r?\n/)[0].trim() || "(空注释)"}」?`
-            : `删除${parts.join("、")}?`;
-        if (!(await confirmDelete(summary))) return;
-
-        for (const id of ids) {
-          removeToTrash(store, id);
-          closeTagEditor(id);
-        }
-        await saveStore();
+        await batchDeleteByIds(store, ids);
         return;
       }
 
