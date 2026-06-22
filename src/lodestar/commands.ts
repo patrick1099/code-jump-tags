@@ -182,19 +182,23 @@ export async function copyTagLink(node: any) {
 
 // Copy every tag under a folder (or the (未分组) group) as markdown links, one
 // per line. Reads the folder's derived tour steps, so it works for both.
-export async function copyFolderLinks(node: any) {
-  const steps: any[] = node?.tour?.steps ?? [];
-  if (steps.length === 0) {
-    window.showInformationMessage("Code Jump Tags: 该文件夹下没有标签");
+export async function copyFolderLinks(node: any, additionalNodes?: any[]) {
+  const store = getStore();
+  const idOf = (n: any): string | undefined =>
+    n?.tagLink?.id ?? n?.tagId ?? n?.step?.id ??
+    (n?.tour?.id ? n.tour.id.split("::").pop() : undefined);
+  const selected =
+    additionalNodes && additionalNodes.length > 0 ? additionalNodes : [node];
+  const ids = selected.map(idOf).filter((x): x is string => !!x);
+
+  const { collectTagsUnder } = await import("./selection");
+  const tags = collectTagsUnder(store, ids);
+  if (tags.length === 0) {
+    window.showInformationMessage("Code Jump Tags: 没有可复制的标签");
     return;
   }
-  const links = steps.map(s =>
-    tagLinkMarkdown({
-      note: s.description,
-      file: s.file,
-      line: s.line,
-      pattern: s.pattern
-    })
+  const links = tags.map(t =>
+    tagLinkMarkdown({ note: t.note, file: t.file, line: t.line, pattern: t.pattern })
   );
   await env.clipboard.writeText(links.join("\n"));
   window.setStatusBarMessage(`Code Jump Tags: 已复制 ${links.length} 条链接`, 2000);
@@ -258,29 +262,39 @@ export async function editNote(tagId?: string) {
 }
 
 // Delete a folder (and the tags inside it) from the store. Invoked from the
-// tree's folder node.
-export async function deleteFolder(node: any) {
-  const tourId: string | undefined = node?.tour?.id;
-  const folderId = tourId ? tourId.split("::")[1] : undefined;
+// tree's folder node. Supports multi-selection: additionalNodes is the VS Code
+// selected-items array forwarded as the second command argument.
+export async function deleteFolder(node: any, additionalNodes?: any[]) {
   const store = getStore();
-  const found = folderId ? findNode(store, folderId) : undefined;
-  if (!found || found.node.type !== "folder") {
+  const { pruneCovered } = await import("./selection");
+  const idOf = (n: any): string | undefined =>
+    n?.tour?.id ? n.tour.id.split("::").pop() : n?.step?.id;
+  const selected =
+    additionalNodes && additionalNodes.length > 0 ? additionalNodes : [node];
+  const ids = pruneCovered(
+    store,
+    selected.map(idOf).filter((x): x is string => !!x)
+  );
+  if (ids.length === 0) {
     window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
     return;
   }
 
-  const count = found.node.children.length;
-  const ok = await confirmDelete(
-    count > 0
-      ? `删除文件夹「${found.node.title}」及其中 ${count} 个标签?`
-      : `删除文件夹「${found.node.title}」?`
-  );
+  let tagCount = 0;
+  let folderCount = 0;
+  for (const id of ids) {
+    const f = findNode(store, id);
+    if (f?.node.type === "folder") folderCount++;
+    else tagCount++;
+  }
+  const parts: string[] = [];
+  if (folderCount) parts.push(`${folderCount} 个文件夹(及其中的标签)`);
+  if (tagCount) parts.push(`${tagCount} 个标签`);
+  const ok = await confirmDelete(`删除${parts.join("、")}?`);
   if (!ok) return;
 
-  removeToTrash(store, folderId!);
+  for (const id of ids) removeToTrash(store, id);
   await saveStore();
-  // A deleted folder takes its child tags with it; close any open edit bubble so
-  // it doesn't outlive the tag it was editing.
   closeTagEditor();
 }
 

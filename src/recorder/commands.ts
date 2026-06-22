@@ -791,19 +791,44 @@ export function registerRecorderCommands() {
       // the store (with confirm + recycle bin) instead of mutating the cache.
       if ((node as any)?.step?.id) {
         const { getStore, saveStore } = await import("../lodestar/persistence");
-        const { removeToTrash } = await import("../lodestar/tree");
+        const { removeToTrash, findNode } = await import("../lodestar/tree");
+        const { pruneCovered } = await import("../lodestar/selection");
         const { confirmDelete } = await import("../lodestar/commands");
-        const step = (node as CodeTourStepNode).step!;
-        const note = (step.description || "").split(/\r?\n/)[0].trim();
-        if (!(await confirmDelete(`删除标签「${note || "(空注释)"}」?`))) {
-          return;
-        }
-        removeToTrash(getStore(), step.id!);
-        await saveStore();
-        // Drop the tag's open edit bubble, if any, so it doesn't linger after
-        // the tag it belonged to is gone.
         const { closeTagEditor } = await import("../lodestar/editThread");
-        closeTagEditor(step.id!);
+        const store = getStore();
+
+        const idOf = (n: any): string | undefined =>
+          n?.step?.id ?? (n?.tour?.id ? n.tour.id.split("::").pop() : undefined);
+
+        const selected =
+          additionalNodes && additionalNodes.length > 0 ? additionalNodes : [node];
+        const ids = pruneCovered(
+          store,
+          selected.map(idOf).filter((x): x is string => !!x)
+        );
+        if (ids.length === 0) return;
+
+        let tagCount = 0;
+        let folderCount = 0;
+        for (const id of ids) {
+          const f = findNode(store, id);
+          if (f?.node.type === "folder") folderCount++;
+          else tagCount++;
+        }
+        const parts: string[] = [];
+        if (tagCount) parts.push(`${tagCount} 个标签`);
+        if (folderCount) parts.push(`${folderCount} 个文件夹(及其中的标签)`);
+        const summary =
+          ids.length === 1 && tagCount === 1
+            ? `删除标签「${((node as CodeTourStepNode).step!.description || "").split(/\r?\n/)[0].trim() || "(空注释)"}」?`
+            : `删除${parts.join("、")}?`;
+        if (!(await confirmDelete(summary))) return;
+
+        for (const id of ids) {
+          removeToTrash(store, id);
+          closeTagEditor(id);
+        }
+        await saveStore();
         return;
       }
 
