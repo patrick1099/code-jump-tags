@@ -36,6 +36,23 @@ export function getOrCreateInbox(
   return inbox;
 }
 
+// One-time, idempotent: wrap any root-level loose tags (from before the inbox
+// model) into the inbox folder, preserving their order. Returns true if it moved
+// anything. Safe to call on every load.
+export function migrateLooseTags(
+  store: LodestarStore,
+  idGen: () => string
+): boolean {
+  const looseTags = store.tree.filter(
+    (n): n is TagNode => n.type === "tag"
+  );
+  if (looseTags.length === 0) return false;
+  store.tree = store.tree.filter(n => n.type !== "tag");
+  const inbox = getOrCreateInbox(store, idGen);
+  inbox.children.push(...looseTags);
+  return true;
+}
+
 export function createEmptyStore(): LodestarStore {
   return { version: 1, tree: [] };
 }
