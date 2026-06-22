@@ -4,6 +4,8 @@ import { LodestarStore, TagNode, TreeNode } from "./types";
 // Remove ids whose ancestor is also in the selection — deleting/operating on a
 // folder already covers its descendants, so a mixed multi-select doesn't
 // double-handle nested nodes.
+// Ids not found in the store are kept as-is (the ancestor walk simply doesn't
+// run for them); callers are expected to pass live selection ids.
 export function pruneCovered(store: LodestarStore, ids: string[]): string[] {
   const set = new Set(ids);
   return ids.filter(id => {
@@ -35,6 +37,7 @@ export function collectTagsUnder(
     }
   }
   for (const id of ids) {
+    // Ids not found in the store contribute nothing; callers pass live ids.
     const found = findNode(store, id);
     if (found) walk(found.node);
   }
