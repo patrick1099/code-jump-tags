@@ -7,7 +7,12 @@ import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
 import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
 import { findNode, LineEdit } from "../lodestar/tree";
-import { reanchorTag, resolveAnchoredLine } from "../lodestar/relocate";
+import {
+  reanchorTag,
+  resolveAnchoredLine,
+  lineAnchorText,
+  linePattern
+} from "../lodestar/relocate";
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
@@ -177,8 +182,44 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
     endChar: c.range.end.character,
     delta: (c.text.match(/\n/g)?.length ?? 0) - (c.range.end.line - c.range.start.line)
   }));
+  // RC3: a pure same-line edit (no lines added/removed) doesn't move any tag,
+  // but it DOES change the edited line's text — refresh those tags' anchors so
+  // they never go stale and prime a wrong fuzzy jump on the next structural
+  // edit / reopen.
   if (edits.every(edit => edit.delta === 0)) {
-    return; // pure same-line text edit — no lines added/removed
+    const editedLines0 = new Set<number>();
+    for (const c of e.contentChanges) {
+      for (let ln = c.range.start.line; ln <= c.range.end.line; ln++) {
+        editedLines0.add(ln);
+      }
+    }
+    const steps0 = await getTourSteps(e.document);
+    const lines0 = e.document.getText().split(/\r?\n/);
+    const cache0 = getStore();
+    let touched = 0;
+    for (const [, step] of steps0) {
+      if (!step.id) continue;
+      const found = findNode(cache0, step.id);
+      if (!found || found.node.type !== "tag") continue;
+      const node = found.node;
+      if (!editedLines0.has(node.line - 1)) continue;
+      const cur = lines0[node.line - 1];
+      if (cur === undefined) continue;
+      const t = lineAnchorText(cur);
+      const p = linePattern(cur);
+      if (t !== node.text || p !== node.pattern) {
+        node.text = t;
+        node.pattern = p;
+        touched++;
+      }
+    }
+    if (touched > 0) {
+      rebuildTours();
+      debouncedSaveStore();
+    } else if (vscode.window.activeTextEditor?.document === e.document) {
+      updateDecorations(vscode.window.activeTextEditor);
+    }
+    return;
   }
 
   // Which tags live in this document (resolves each tag's file uri the same way
