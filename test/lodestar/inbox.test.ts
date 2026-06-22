@@ -72,3 +72,40 @@ describe("migrateLooseTags", () => {
     expect(inbox.children.map(c => c.id)).toEqual(["t1"]);
   });
 });
+
+import { moveNode, renameFolderNode } from "../../src/lodestar/tree";
+
+describe("inbox graduation", () => {
+  it("moveNode clears the inbox flag when moved under another folder", () => {
+    seq = 0;
+    const s = createEmptyStore();
+    const inbox = getOrCreateInbox(s, idGen); // at root, inbox:true
+    s.tree.push(folder("host"));
+    moveNode(s, inbox.id, "host", 0);
+    expect(inbox.inbox).toBeFalsy();          // graduated
+  });
+
+  it("moveNode keeps the inbox flag when reordered within the root", () => {
+    seq = 0;
+    const s = createEmptyStore();
+    const inbox = getOrCreateInbox(s, idGen);
+    s.tree.push(folder("a"));
+    moveNode(s, inbox.id, null, 1);           // still at root
+    expect(inbox.inbox).toBe(true);
+  });
+
+  it("renameFolderNode renames and graduates the inbox", () => {
+    seq = 0;
+    const s = createEmptyStore();
+    const inbox = getOrCreateInbox(s, idGen);
+    expect(renameFolderNode(s, inbox.id, "链路A")).toBe(true);
+    expect(inbox.title).toBe("链路A");
+    expect(inbox.inbox).toBeFalsy();
+  });
+
+  it("renameFolderNode returns false for a missing id", () => {
+    seq = 0;
+    const s = createEmptyStore();
+    expect(renameFolderNode(s, "nope", "x")).toBe(false);
+  });
+});
