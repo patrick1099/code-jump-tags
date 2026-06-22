@@ -21,10 +21,16 @@ export function getOrCreateInbox(
   store: LodestarStore,
   idGen: () => string
 ): FolderNode {
-  const existing = store.tree.find(
+  // Self-heal the at-most-one-inbox invariant: a deleted inbox can be restored
+  // from the recycle bin after a fresh one was lazily created, leaving two
+  // flagged inboxes at root. Keep the first, graduate the rest.
+  const inboxes = store.tree.filter(
     (n): n is FolderNode => n.type === "folder" && n.inbox === true
   );
-  if (existing) return existing;
+  if (inboxes.length > 0) {
+    for (let i = 1; i < inboxes.length; i++) delete inboxes[i].inbox;
+    return inboxes[0];
+  }
   const inbox: FolderNode = {
     type: "folder",
     id: idGen(),
