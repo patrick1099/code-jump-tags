@@ -261,6 +261,71 @@ export async function editNote(tagId?: string) {
   await openTagEditor(tagId);
 }
 
+// Shared batch-delete helper: count tags vs folders among `ids`, build a
+// confirmation summary (with named single-item wording for both a single tag
+// and a single folder), prompt via confirmDelete, and on confirmation loop
+// removeToTrash + close affected editors. Returns true if the items were
+// deleted, false if the user cancelled.
+//
+// closeTagEditor semantics: for each removed tag id we call closeTagEditor(id)
+// so only that tag's bubble is closed. If any folder was removed we
+// additionally call closeTagEditor() with no arg once, matching the old
+// deleteFolder behavior (close whatever bubble is open, since we don't track
+// which individual tag id the user was editing inside the folder).
+export async function batchDeleteByIds(
+  store: import("./types").LodestarStore,
+  ids: string[]
+): Promise<boolean> {
+  if (ids.length === 0) return false;
+
+  let tagCount = 0;
+  let folderCount = 0;
+  let singleTagNote = "";
+  let singleFolderTitle = "";
+  for (const id of ids) {
+    const f = findNode(store, id);
+    if (f?.node.type === "folder") {
+      folderCount++;
+      if (ids.length === 1) singleFolderTitle = f.node.title;
+    } else {
+      tagCount++;
+      if (ids.length === 1 && f?.node.type === "tag") {
+        singleTagNote = f.node.note;
+      }
+    }
+  }
+
+  let summary: string;
+  if (ids.length === 1 && tagCount === 1) {
+    const label = singleTagNote.split(/\r?\n/)[0].trim() || "(空注释)";
+    summary = `删除标签「${label}」?`;
+  } else if (ids.length === 1 && folderCount === 1) {
+    summary = `删除文件夹「${singleFolderTitle}」?`;
+  } else {
+    const parts: string[] = [];
+    if (tagCount) parts.push(`${tagCount} 个标签`);
+    if (folderCount) parts.push(`${folderCount} 个文件夹(及其中的标签)`);
+    summary = `删除${parts.join("、")}?`;
+  }
+
+  if (!(await confirmDelete(summary))) return false;
+
+  let anyFolder = false;
+  for (const id of ids) {
+    const f = findNode(store, id);
+    const isFolder = f?.node.type === "folder";
+    removeToTrash(store, id);
+    if (isFolder) {
+      anyFolder = true;
+    } else {
+      closeTagEditor(id);
+    }
+  }
+  if (anyFolder) closeTagEditor();
+  await saveStore();
+  return true;
+}
+
 // Delete a folder (and the tags inside it) from the store. Invoked from the
 // tree's folder node. Supports multi-selection: additionalNodes is the VS Code
 // selected-items array forwarded as the second command argument.
@@ -279,23 +344,7 @@ export async function deleteFolder(node: any, additionalNodes?: any[]) {
     window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
     return;
   }
-
-  let tagCount = 0;
-  let folderCount = 0;
-  for (const id of ids) {
-    const f = findNode(store, id);
-    if (f?.node.type === "folder") folderCount++;
-    else tagCount++;
-  }
-  const parts: string[] = [];
-  if (folderCount) parts.push(`${folderCount} 个文件夹(及其中的标签)`);
-  if (tagCount) parts.push(`${tagCount} 个标签`);
-  const ok = await confirmDelete(`删除${parts.join("、")}?`);
-  if (!ok) return;
-
-  for (const id of ids) removeToTrash(store, id);
-  await saveStore();
-  closeTagEditor();
+  await batchDeleteByIds(store, ids);
 }
 
 // Restore deleted tags/folders from the recycle bin back to the tree root. The
