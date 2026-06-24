@@ -3,7 +3,7 @@
   "displayName": "Code Jump Tags",
   "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
   "publisher": "patrick1099",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
@@ -102,6 +102,21 @@
       {
         "command": "codeJumpTags.cancelMoveTag",
         "title": "取消标签移动",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.undoMove",
+        "title": "撤回移动",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.redoMove",
+        "title": "恢复移动",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.undoTagMove",
+        "title": "撤回此标签的移动",
         "category": "Code Jump Tags"
       },
       {
@@ -228,6 +243,18 @@
         {
           "command": "codeJumpTags.cancelMoveTag",
           "when": "codeJumpTags:movingTag"
+        },
+        {
+          "command": "codeJumpTags.undoMove",
+          "when": "codeJumpTags:canUndoMove"
+        },
+        {
+          "command": "codeJumpTags.redoMove",
+          "when": "codeJumpTags:canRedoMove"
+        },
+        {
+          "command": "codeJumpTags.undoTagMove",
+          "when": "false"
         },
         {
           "command": "codeJumpTags.saveTag",
@@ -413,6 +440,11 @@
           "command": "codeJumpTags.moveTagToCursor",
           "when": "viewItem =~ /^codeJumpTags.tag/",
           "group": "move@2"
+        },
+        {
+          "command": "codeJumpTags.undoTagMove",
+          "when": "viewItem =~ /^codeJumpTags.tag/",
+          "group": "move@3"
         },
         {
           "command": "codeJumpTags.newSubfolder",
