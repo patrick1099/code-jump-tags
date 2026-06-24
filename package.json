@@ -3,7 +3,7 @@
   "displayName": "Code Jump Tags",
   "description": "Leave annotated line tags, organize them into folders, and jump back through stable VS Code links.",
   "publisher": "patrick1099",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
@@ -83,6 +83,26 @@
       {
         "command": "codeJumpTags.renameTag",
         "title": "重命名标签"
+      },
+      {
+        "command": "codeJumpTags.cutTag",
+        "title": "剪切标签",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.pasteTagHere",
+        "title": "粘贴标签到此行",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.moveTagToCursor",
+        "title": "移到光标行",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.cancelMoveTag",
+        "title": "取消标签移动",
+        "category": "Code Jump Tags"
       },
       {
         "command": "codeJumpTags.saveTag",
@@ -192,6 +212,22 @@
         {
           "command": "codeJumpTags.renameTag",
           "when": "false"
+        },
+        {
+          "command": "codeJumpTags.cutTag",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.moveTagToCursor",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.pasteTagHere",
+          "when": "codeJumpTags:movingTag"
+        },
+        {
+          "command": "codeJumpTags.cancelMoveTag",
+          "when": "codeJumpTags:movingTag"
         },
         {
           "command": "codeJumpTags.saveTag",
@@ -369,6 +405,16 @@
           "group": "change@3"
         },
         {
+          "command": "codeJumpTags.cutTag",
+          "when": "viewItem =~ /^codeJumpTags.tag/",
+          "group": "move@1"
+        },
+        {
+          "command": "codeJumpTags.moveTagToCursor",
+          "when": "viewItem =~ /^codeJumpTags.tag/",
+          "group": "move@2"
+        },
+        {
           "command": "codeJumpTags.newSubfolder",
           "when": "view == codeJumpTags.tags && viewItem =~ /^codeJumpTags.folder(\\.|$)/",
           "group": "change@0"
@@ -387,6 +433,13 @@
           "command": "codeJumpTags.deleteFolder",
           "when": "view == codeJumpTags.tags && viewItem =~ /^codeJumpTags.folder(\\.|$)/",
           "group": "manage@3"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "codeJumpTags.pasteTagHere",
+          "when": "codeJumpTags:movingTag",
+          "group": "codeJumpTags@1"
         }
       ]
     },
