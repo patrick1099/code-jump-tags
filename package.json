@@ -107,12 +107,14 @@
       {
         "command": "codeJumpTags.undoMove",
         "title": "撤回移动",
-        "category": "Code Jump Tags"
+        "category": "Code Jump Tags",
+        "icon": "$(discard)"
       },
       {
         "command": "codeJumpTags.redoMove",
         "title": "恢复移动",
-        "category": "Code Jump Tags"
+        "category": "Code Jump Tags",
+        "icon": "$(redo)"
       },
       {
         "command": "codeJumpTags.undoTagMove",
@@ -393,6 +395,16 @@
           "command": "codeJumpTags.restoreFromTrash",
           "when": "view == codeJumpTags.tags",
           "group": "navigation@5"
+        },
+        {
+          "command": "codeJumpTags.undoMove",
+          "when": "view == codeJumpTags.tags",
+          "group": "navigation@6"
+        },
+        {
+          "command": "codeJumpTags.redoMove",
+          "when": "view == codeJumpTags.tags",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
