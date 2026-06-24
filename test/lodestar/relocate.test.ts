@@ -114,6 +114,41 @@ describe("reanchorTag (persisted live re-anchoring)", () => {
     expect(after.line).toBe(2);            // stays on the upper half
     expect(after.text).toBe("if (a > b) {"); // re-anchored to the upper half
   });
+
+  // Cutting the tagged line whole (Ctrl+X / delete-line) makes its anchor text
+  // momentarily vanish. Resolution then FALLS BACK to the stored line — which
+  // now holds an UNRELATED neighbour's text. The old code overwrote the anchor
+  // with that neighbour ("poisoning"), so a later undo could never recover.
+  it("does NOT poison the anchor when the tagged line is cut (unconfident fallback keeps the old anchor)", () => {
+    // line 5 "  foo();" is cut; "  bar();" slides up into its slot.
+    const afterCut = ["L1", "L2", "L3", "L4", "  bar();", "L7"].join("\n");
+    const after = reanchorTag(
+      afterCut,
+      { line: 5, text: "foo();", pattern: linePattern("  foo();") },
+      [{ start: 4, end: 5, endChar: 0, delta: -1 }]
+    );
+    // The resolved line never matched "foo();", so the anchor must be preserved
+    // verbatim — not rewritten to "bar();".
+    expect(after.text).toBe("foo();");
+    expect(after.pattern).toBe(linePattern("  foo();"));
+  });
+
+  it("recovers to the original line after a cut + undo (no poisoning)", () => {
+    // 1) cut line 5 ("  foo();")
+    const afterCut = ["L1", "L2", "L3", "L4", "  bar();", "L7"].join("\n");
+    const cut = reanchorTag(
+      afterCut,
+      { line: 5, text: "foo();", pattern: linePattern("  foo();") },
+      [{ start: 4, end: 5, endChar: 0, delta: -1 }]
+    );
+    // 2) undo: line 5 is re-inserted
+    const restored = ["L1", "L2", "L3", "L4", "  foo();", "  bar();", "L7"].join("\n");
+    const undone = reanchorTag(restored, cut, [
+      { start: 4, end: 4, endChar: 0, delta: 1 }
+    ]);
+    expect(undone.line).toBe(5);     // back home, not stuck on the "bar();" line
+    expect(undone.text).toBe("foo();");
+  });
 });
 
 describe("normalizeWs", () => {
