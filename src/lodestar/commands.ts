@@ -24,15 +24,18 @@ import {
   toggleNotePosition
 } from "./editThread";
 import { getStore, saveStore } from "./persistence";
-import { resolveLine } from "./relocate";
+import { resolveLine, linePattern, lineAnchorText } from "./relocate";
 import {
   createFolder,
   findNode,
+  findTagByLocation,
   removeToTrash,
   renameFolderNode,
-  restoreSelection
+  restoreSelection,
+  retargetTag
 } from "./tree";
 import { TreeNode, TrashedEntry } from "./types";
+import { getRelativePath } from "../utils";
 
 // Confirm a delete, honoring the codeJumpTags.confirmDelete setting. The modal
 // offers a "删除并不再询问" choice that turns the setting off for next time.
@@ -259,6 +262,107 @@ export async function renameTag(node: any) {
 export async function editNote(tagId?: string) {
   if (!tagId) return;
   await openTagEditor(tagId);
+}
+
+// ── 0.6.0 移动 / 剪切粘贴标签 ────────────────────────────────────────────────
+// 正被「剪切」、等待粘贴目标的标签 id。movingTag 上下文键据此决定编辑器右键是否
+// 显示「粘贴标签到此行」。
+let s_movingTagId: string | undefined;
+
+function setMovingTag(id: string | undefined) {
+  s_movingTagId = id;
+  commands.executeCommand(
+    "setContext",
+    "codeJumpTags:movingTag",
+    id !== undefined
+  );
+}
+
+// 读当前光标作为重锚目标:工作区相对路径、1-based 行号、该行内容锚(与 addTag 同源)。
+function cursorTarget():
+  | { file: string; line: number; text?: string; pattern?: string }
+  | undefined {
+  const editor = window.activeTextEditor;
+  if (!editor) {
+    window.showInformationMessage("Code Jump Tags: 请把光标放到目标代码行");
+    return undefined;
+  }
+  const doc = editor.document;
+  const workspaceRoot = workspace.workspaceFolders![0].uri;
+  const file = getRelativePath(workspaceRoot.path, doc.uri.path);
+  const lineIndex = editor.selection.active.line;
+  const line = lineIndex + 1;
+  const lineText = doc.lineAt(lineIndex).text.trim();
+  const text = lineText ? lineAnchorText(lineText) : undefined;
+  const pattern = lineText ? linePattern(lineText) : undefined;
+  return { file, line, text, pattern };
+}
+
+// 把 tagId 重锚到当前光标行;目标行已被「别的」标签占用 → 拒绝(守一行一签)。
+async function placeTagAtCursor(tagId: string): Promise<boolean> {
+  const target = cursorTarget();
+  if (!target) return false;
+  const store = getStore();
+  const existing = findTagByLocation(store, target.file, target.line);
+  if (existing && existing.id !== tagId) {
+    const label =
+      (existing.note || "").split(/\r?\n/)[0].trim() || "(无注释)";
+    window.showInformationMessage(`Code Jump Tags: 该行已有标签「${label}」`);
+    return false;
+  }
+  if (
+    !retargetTag(store, tagId, target.file, target.line, target.text, target.pattern)
+  ) {
+    window.showInformationMessage("Code Jump Tags: 找不到该标签");
+    return false;
+  }
+  await saveStore();
+  window.setStatusBarMessage(
+    `Code Jump Tags: 已移动到 ${target.file}:${target.line}`,
+    2000
+  );
+  return true;
+}
+
+// 剪切标签:记下要移动的标签,等待编辑器里右键「粘贴标签到此行」。
+export async function cutTag(node: any) {
+  const tagId: string | undefined = node?.tagLink?.id ?? node?.tagId;
+  if (!tagId) {
+    window.showInformationMessage(
+      "Code Jump Tags: 请在某个标签上右键使用「剪切标签」"
+    );
+    return;
+  }
+  setMovingTag(tagId);
+  window.setStatusBarMessage(
+    "Code Jump Tags: 标签移动中——把光标放到目标行,右键「粘贴标签到此行」",
+    4000
+  );
+}
+
+// 粘贴到此行:把剪切中的标签钉到当前光标行(可跨文件)。
+export async function pasteTagHere() {
+  if (!s_movingTagId) return;
+  const ok = await placeTagAtCursor(s_movingTagId);
+  if (ok) setMovingTag(undefined);
+}
+
+// 移到光标行:一步到位,把树里选中的标签钉到当前光标行。
+export async function moveTagToCursor(node: any) {
+  const tagId: string | undefined = node?.tagLink?.id ?? node?.tagId;
+  if (!tagId) {
+    window.showInformationMessage(
+      "Code Jump Tags: 请在某个标签上右键使用「移到光标行」"
+    );
+    return;
+  }
+  await placeTagAtCursor(tagId);
+}
+
+// 取消移动:清掉剪切中的标签。
+export async function cancelMoveTag() {
+  setMovingTag(undefined);
+  window.setStatusBarMessage("Code Jump Tags: 已取消标签移动", 2000);
 }
 
 // Shared batch-delete helper: count tags vs folders among `ids`, build a
@@ -569,6 +673,13 @@ export function registerLodestarCommands(context: ExtensionContext) {
       restoreFromTrash
     ),
     commands.registerCommand(`${EXTENSION_NAME}.newFolder`, newFolder),
-    commands.registerCommand(`${EXTENSION_NAME}.newSubfolder`, newSubfolder)
+    commands.registerCommand(`${EXTENSION_NAME}.newSubfolder`, newSubfolder),
+    commands.registerCommand(`${EXTENSION_NAME}.cutTag`, cutTag),
+    commands.registerCommand(`${EXTENSION_NAME}.pasteTagHere`, pasteTagHere),
+    commands.registerCommand(
+      `${EXTENSION_NAME}.moveTagToCursor`,
+      moveTagToCursor
+    ),
+    commands.registerCommand(`${EXTENSION_NAME}.cancelMoveTag`, cancelMoveTag)
   );
 }
