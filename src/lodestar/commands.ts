@@ -36,6 +36,16 @@ import {
 } from "./tree";
 import { TreeNode, TrashedEntry } from "./types";
 import { getRelativePath } from "../utils";
+import {
+  Anchor,
+  createJournal,
+  popRedo,
+  popUndo,
+  pushRedo,
+  pushUndo,
+  recordMove,
+  removeUndoForTag
+} from "./moveJournal";
 
 // Confirm a delete, honoring the codeJumpTags.confirmDelete setting. The modal
 // offers a "删除并不再询问" choice that turns the setting off for next time.
@@ -314,6 +324,17 @@ async function placeTagAtCursor(tagId: string): Promise<boolean> {
     window.showInformationMessage(`Code Jump Tags: 该行已有标签「${label}」`);
     return false;
   }
+  // 记录「移动前」的锚供撤回用:必须在 retargetTag 原地改写之前拷出字段值。
+  const before = findNode(store, tagId);
+  const fromAnchor: Anchor | undefined =
+    before && before.node.type === "tag"
+      ? {
+          file: before.node.file,
+          line: before.node.line,
+          text: before.node.text,
+          pattern: before.node.pattern
+        }
+      : undefined;
   if (
     !retargetTag(store, tagId, target.file, target.line, target.text, target.pattern)
   ) {
@@ -321,6 +342,23 @@ async function placeTagAtCursor(tagId: string): Promise<boolean> {
     return false;
   }
   await saveStore();
+  // 只有真正换了位置才进撤回栈(同文件同行原地不记)。
+  if (
+    fromAnchor &&
+    (fromAnchor.file !== target.file || fromAnchor.line !== target.line)
+  ) {
+    recordMove(s_moveJournal, {
+      tagId,
+      from: fromAnchor,
+      to: {
+        file: target.file,
+        line: target.line,
+        text: target.text,
+        pattern: target.pattern
+      }
+    });
+    refreshMoveContextKeys();
+  }
   window.setStatusBarMessage(
     `Code Jump Tags: 已移动到 ${target.file}:${target.line}`,
     2000
@@ -367,6 +405,99 @@ export async function moveTagToCursor(node: any) {
 export async function cancelMoveTag() {
   setMovingTag(undefined);
   window.setStatusBarMessage("Code Jump Tags: 已取消标签移动", 2000);
+}
+
+// ── 0.6.1 撤回 / 恢复标签移动 ────────────────────────────────────────────────
+// 会话级内存撤回栈;记录显式移动(粘贴到此行 / 移到光标行),撤回放回上一处并跳转。
+// 纯内存,随插件生命周期,不持久化。
+const s_moveJournal = createJournal();
+
+function refreshMoveContextKeys() {
+  commands.executeCommand(
+    "setContext",
+    "codeJumpTags:canUndoMove",
+    s_moveJournal.undo.length > 0
+  );
+  commands.executeCommand(
+    "setContext",
+    "codeJumpTags:canRedoMove",
+    s_moveJournal.redo.length > 0
+  );
+}
+
+// 把标签放到一个明确的锚点(撤回/恢复用):守一行一签 → retargetTag → 存盘 → 跳转。
+// 返回 ok | occupied(目标行被别的标签占用) | missing(标签已删/找不到)。
+type ApplyResult = "ok" | "occupied" | "missing";
+async function applyMove(tagId: string, target: Anchor): Promise<ApplyResult> {
+  const store = getStore();
+  const existing = findTagByLocation(store, target.file, target.line);
+  if (existing && existing.id !== tagId) {
+    const label =
+      (existing.note || "").split(/\r?\n/)[0].trim() || "(无注释)";
+    window.showInformationMessage(
+      `Code Jump Tags: 原位置已被标签「${label}」占用`
+    );
+    return "occupied";
+  }
+  if (
+    !retargetTag(store, tagId, target.file, target.line, target.text, target.pattern)
+  ) {
+    window.showInformationMessage("Code Jump Tags: 该标签已删除,无法撤回");
+    return "missing";
+  }
+  await saveStore();
+  await gotoLocation(target.file, target.line, target.pattern);
+  return "ok";
+}
+
+// 全局撤回:退回最近一次移动并跳转。
+export async function undoMove() {
+  const entry = popUndo(s_moveJournal);
+  if (!entry) return;
+  const r = await applyMove(entry.tagId, entry.from);
+  if (r === "ok") {
+    pushRedo(s_moveJournal, entry);
+  } else if (r === "occupied") {
+    pushUndo(s_moveJournal, entry); // 失败回滚:留在 undo 可重试
+  }
+  // r === "missing": 丢弃(标签已删,永远 apply 不了)
+  refreshMoveContextKeys();
+}
+
+// 全局恢复(redo):重做刚撤掉的那次移动并跳转。
+export async function redoMove() {
+  const entry = popRedo(s_moveJournal);
+  if (!entry) return;
+  const r = await applyMove(entry.tagId, entry.to);
+  if (r === "ok") {
+    pushUndo(s_moveJournal, entry);
+  } else if (r === "occupied") {
+    pushRedo(s_moveJournal, entry);
+  }
+  refreshMoveContextKeys();
+}
+
+// 针对某标签撤回它自己的上一次移动(树右键)。
+export async function undoTagMove(node: any) {
+  const tagId: string | undefined = node?.tagLink?.id ?? node?.tagId;
+  if (!tagId) {
+    window.showInformationMessage(
+      "Code Jump Tags: 请在某个标签上右键使用「撤回此标签的移动」"
+    );
+    return;
+  }
+  const entry = removeUndoForTag(s_moveJournal, tagId);
+  if (!entry) {
+    window.showInformationMessage("Code Jump Tags: 该标签没有可撤回的移动");
+    return;
+  }
+  const r = await applyMove(entry.tagId, entry.from);
+  if (r === "ok") {
+    pushRedo(s_moveJournal, entry);
+  } else if (r === "occupied") {
+    pushUndo(s_moveJournal, entry);
+  }
+  refreshMoveContextKeys();
 }
 
 // Shared batch-delete helper: count tags vs folders among `ids`, build a
@@ -684,6 +815,9 @@ export function registerLodestarCommands(context: ExtensionContext) {
       `${EXTENSION_NAME}.moveTagToCursor`,
       moveTagToCursor
     ),
-    commands.registerCommand(`${EXTENSION_NAME}.cancelMoveTag`, cancelMoveTag)
+    commands.registerCommand(`${EXTENSION_NAME}.cancelMoveTag`, cancelMoveTag),
+    commands.registerCommand(`${EXTENSION_NAME}.undoMove`, undoMove),
+    commands.registerCommand(`${EXTENSION_NAME}.redoMove`, redoMove),
+    commands.registerCommand(`${EXTENSION_NAME}.undoTagMove`, undoTagMove)
   );
 }
