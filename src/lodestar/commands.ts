@@ -442,7 +442,7 @@ async function applyMove(tagId: string, target: Anchor): Promise<ApplyResult> {
   if (
     !retargetTag(store, tagId, target.file, target.line, target.text, target.pattern)
   ) {
-    window.showInformationMessage("Code Jump Tags: 该标签已删除,无法撤回");
+    window.showInformationMessage("Code Jump Tags: 该标签已删除,无法定位");
     return "missing";
   }
   await saveStore();
@@ -453,7 +453,10 @@ async function applyMove(tagId: string, target: Anchor): Promise<ApplyResult> {
 // 全局撤回:退回最近一次移动并跳转。
 export async function undoMove() {
   const entry = popUndo(s_moveJournal);
-  if (!entry) return;
+  if (!entry) {
+    window.showInformationMessage("Code Jump Tags: 没有可撤回的移动");
+    return;
+  }
   const r = await applyMove(entry.tagId, entry.from);
   if (r === "ok") {
     pushRedo(s_moveJournal, entry);
@@ -467,7 +470,10 @@ export async function undoMove() {
 // 全局恢复(redo):重做刚撤掉的那次移动并跳转。
 export async function redoMove() {
   const entry = popRedo(s_moveJournal);
-  if (!entry) return;
+  if (!entry) {
+    window.showInformationMessage("Code Jump Tags: 没有可恢复的移动");
+    return;
+  }
   const r = await applyMove(entry.tagId, entry.to);
   if (r === "ok") {
     pushUndo(s_moveJournal, entry);
