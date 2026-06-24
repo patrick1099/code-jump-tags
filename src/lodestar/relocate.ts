@@ -62,12 +62,50 @@ export function reanchorTag(
 
   const lines = text.split(/\r?\n/);
   const current = lines[line - 1];
-  const newText =
-    current !== undefined ? lineAnchorText(current) ?? anchor.text : anchor.text;
-  const newPattern =
-    current !== undefined ? linePattern(current) ?? anchor.pattern : anchor.pattern;
 
+  // Decide whether to ADOPT the resolved line's text as the tag's new anchor.
+  // resolve*() returns the stored line BOTH when it genuinely matched and when
+  // nothing matched (a blind fallback). Adopting on a blind fallback overwrites
+  // a good anchor with an unrelated line's text ("poisoning") — and that poison
+  // survives an undo, dragging the tag to the wrong line (e.g. cut a tagged line
+  // whole, then undo: the neighbour that slid up would be adopted, so undo lands
+  // the tag on the neighbour). We adopt only when we can trust the resolved line
+  // really is this tag's line:
+  //   - the tag's own line was NOT structurally deleted by this change (it was
+  //     merely shifted, or edited in place — e.g. a mid-line split), so whatever
+  //     it now reads IS the tag's line; or
+  //   - the line WAS deleted, but content recovery found a confident match
+  //     elsewhere (the line genuinely moved). Otherwise keep the old anchor so a
+  //     later edit / undo can still recover the original line by content.
+  const line0 = anchor.line - 1;
+  const tagLineDeleted = edits.some(e => e.start <= line0 && e.end > line0);
+  if (current === undefined || (tagLineDeleted && !lineMatchesAnchor(current, anchor))) {
+    return { line, text: anchor.text, pattern: anchor.pattern };
+  }
+
+  const newText = lineAnchorText(current) ?? anchor.text;
+  const newPattern = linePattern(current) ?? anchor.pattern;
   return { line, text: newText, pattern: newPattern };
+}
+
+// Does `lineText` confidently correspond to this anchor — by fuzzy text
+// similarity (preferred), else by the legacy regex pattern? Used to decide
+// whether a line reached after a structural deletion is really the tag's line.
+function lineMatchesAnchor(lineText: string, anchor: TagAnchor): boolean {
+  if (anchor.text) {
+    return (
+      similarity(normalizeWs(lineText), normalizeWs(anchor.text)) >=
+      SIMILARITY_THRESHOLD
+    );
+  }
+  if (anchor.pattern) {
+    try {
+      return new RegExp(anchor.pattern).test(lineText);
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 // Build the drift-recovery pattern for a line from its raw text. Anchors at the
