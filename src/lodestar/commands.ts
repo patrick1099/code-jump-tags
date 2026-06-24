@@ -287,6 +287,10 @@ function cursorTarget():
     window.showInformationMessage("Code Jump Tags: 请把光标放到目标代码行");
     return undefined;
   }
+  if (!workspace.workspaceFolders?.length) {
+    window.showInformationMessage("Code Jump Tags: 请在工作区中打开文件");
+    return undefined;
+  }
   const doc = editor.document;
   const workspaceRoot = workspace.workspaceFolders![0].uri;
   const file = getRelativePath(workspaceRoot.path, doc.uri.path);
