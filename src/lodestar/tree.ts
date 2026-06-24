@@ -122,6 +122,31 @@ export function findTagByLocation(
   return search(store.tree);
 }
 
+// Re-anchor an existing tag to (file, line), replacing its content anchor.
+// anchorText/anchorPattern are precomputed by the caller from the target line's
+// text (same source as addTag: lineAnchorText/linePattern, both trim). A blank
+// target line → pass undefined for both (weak anchor, as when tagging a blank
+// line). Returns true if a tag with `id` was found and updated; false if the id
+// is unknown or names a folder. note/id/createdAt/containing folder are untouched.
+export function retargetTag(
+  store: LodestarStore,
+  id: string,
+  file: string,
+  line: number,
+  anchorText?: string,
+  anchorPattern?: string
+): boolean {
+  const found = findNode(store, id);
+  if (!found || found.node.type !== "tag") {
+    return false;
+  }
+  found.node.file = file;
+  found.node.line = line;
+  found.node.text = anchorText;
+  found.node.pattern = anchorPattern;
+  return true;
+}
+
 function childrenOf(store: LodestarStore, parentId?: string): TreeNode[] {
   if (!parentId) return store.tree;
   const found = findNode(store, parentId);

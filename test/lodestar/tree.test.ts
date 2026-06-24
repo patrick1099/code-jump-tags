@@ -267,3 +267,58 @@ describe("isSelfOrDescendant (folder-drag guard)", () => {
     expect(isSelfOrDescendant(nested(), "f2", "f1")).toBe(false);
   });
 });
+
+import { retargetTag } from "../../src/lodestar/tree";
+
+describe("retargetTag", () => {
+  it("re-anchors a tag's file/line/text/pattern and returns true", () => {
+    const s = createEmptyStore();
+    addTag(s, tag("1"));
+    const ok = retargetTag(s, "1", "b.c", 42, "foo();", "^\\s*foo\\(\\);");
+    expect(ok).toBe(true);
+    const node = findNode(s, "1")!.node as TagNode;
+    expect(node.file).toBe("b.c");
+    expect(node.line).toBe(42);
+    expect(node.text).toBe("foo();");
+    expect(node.pattern).toBe("^\\s*foo\\(\\);");
+  });
+
+  it("returns false and leaves the store unchanged for an unknown id", () => {
+    const s = createEmptyStore();
+    addTag(s, tag("1"));
+    const before = serialize(s);
+    expect(retargetTag(s, "nope", "b.c", 9)).toBe(false);
+    expect(serialize(s)).toBe(before);
+  });
+
+  it("returns false when the id names a folder", () => {
+    const s = createEmptyStore();
+    createFolder(s, "通信", () => "f1");
+    const before = serialize(s);
+    expect(retargetTag(s, "f1", "b.c", 9)).toBe(false);
+    expect(serialize(s)).toBe(before);
+  });
+
+  it("re-anchors a tag nested in a folder, leaving note/id/createdAt/folder intact", () => {
+    const s = createEmptyStore();
+    createFolder(s, "通信", () => "f1");
+    addTag(s, tag("1"), "f1");
+    expect(retargetTag(s, "1", "b.c", 7, "x", undefined)).toBe(true);
+    const found = findNode(s, "1")!;
+    const node = found.node as TagNode;
+    expect(found.parent!.id).toBe("f1");
+    expect(node.note).toBe("n1");
+    expect(node.createdAt).toBe("t");
+    expect(node.id).toBe("1");
+  });
+
+  it("clears text/pattern to undefined for a blank target line", () => {
+    const s = createEmptyStore();
+    addTag(s, tag("1"));
+    retargetTag(s, "1", "b.c", 3, "had", "hadp");
+    retargetTag(s, "1", "b.c", 4, undefined, undefined);
+    const node = findNode(s, "1")!.node as TagNode;
+    expect(node.text).toBeUndefined();
+    expect(node.pattern).toBeUndefined();
+  });
+});
