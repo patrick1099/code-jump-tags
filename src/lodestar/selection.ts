@@ -43,3 +43,20 @@ export function collectTagsUnder(
   }
   return out;
 }
+
+// All tags anchored to `file`, anywhere in the tree. Used by the per-file
+// suspect recheck.
+export function collectTagsInFile(store: LodestarStore, file: string): TagNode[] {
+  const out: TagNode[] = [];
+  const walk = (nodes: TreeNode[]): void => {
+    for (const node of nodes) {
+      if (node.type === "tag") {
+        if (node.file === file) out.push(node);
+      } else {
+        walk(node.children);
+      }
+    }
+  };
+  walk(store.tree);
+  return out;
+}
