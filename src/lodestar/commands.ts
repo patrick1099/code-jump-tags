@@ -46,6 +46,7 @@ import {
   recordMove,
   removeUndoForTag
 } from "./moveJournal";
+import { getSuspect } from "./suspect";
 
 // Confirm a delete, honoring the codeJumpTags.confirmDelete setting. The modal
 // offers a "删除并不再询问" choice that turns the setting off for next time.
@@ -508,6 +509,12 @@ export async function undoTagMove(node: any) {
 }
 
 // ── 0.7.0 可疑态动作 ─────────────────────────────────────────────────────────
+// Extract tagId from either a string or a tree node object.
+function tagIdOf(arg: string | any): string | undefined {
+  if (typeof arg === "string") return arg;
+  return arg?.tagLink?.id ?? arg?.tagId;
+}
+
 // 读某文件某行(1-based)的内容锚(与 addTag 同源)。
 async function lineAnchorsAt(
   file: string,
@@ -521,7 +528,12 @@ async function lineAnchorsAt(
 }
 
 // 「采纳新位置」: 把标签身份(original)升级为目标行的内容。line 缺省时用光标行。
-export async function promoteToOriginal(tagId: string, line?: number) {
+export async function promoteToOriginal(arg: string | any, line?: number) {
+  const tagId = tagIdOf(arg);
+  if (!tagId) {
+    window.showInformationMessage("Code Jump Tags: 找不到该标签");
+    return;
+  }
   const store = getStore();
   const found = findNode(store, tagId);
   if (!found || found.node.type !== "tag") {
@@ -529,11 +541,11 @@ export async function promoteToOriginal(tagId: string, line?: number) {
     return;
   }
   const file = found.node.file;
+  const candidate = line ?? getSuspect(tagId)?.line;
   const targetLine =
-    line ?? (window.activeTextEditor?.selection.active.line ?? found.node.line - 1) + 1;
+    candidate ?? (window.activeTextEditor?.selection.active.line ?? found.node.line - 1) + 1;
   const anchors = await lineAnchorsAt(file, targetLine);
   if (!anchors) return;
-  // retargetTag 同时写 original = 用户确认 → 重设身份。
   retargetTag(store, tagId, file, targetLine, anchors.text, anchors.pattern);
   await saveStore();
   const { recheckFile } = await import("../player/recheck");
