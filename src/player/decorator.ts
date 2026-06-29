@@ -14,6 +14,7 @@ import {
   linePattern
 } from "../lodestar/relocate";
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
+import { getSuspect } from "../lodestar/suspect";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
 const DISABLED_SCHEMES = [FS_SCHEME_CONTENT, "comment"];
@@ -38,6 +39,21 @@ const TOUR_DECORATOR = vscode.window.createTextEditorDecorationType({
 // your code instead of staying at a fixed column and getting overrun.
 const INLINE_NOTE_DECORATOR = vscode.window.createTextEditorDecorationType({
   rangeBehavior: vscode.DecorationRangeBehavior.ClosedOpen
+});
+
+// Suspect gutter icon: a grey ringed "?" (data-URI SVG, no asset file).
+const SUSPECT_ICON = vscode.Uri.parse(
+  "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#9aa0a6" stroke-width="1.5"/><text x="8" y="11.5" font-size="9" text-anchor="middle" fill="#9aa0a6" font-family="sans-serif">?</text></svg>`
+    )
+);
+const SUSPECT_DECORATOR = vscode.window.createTextEditorDecorationType({
+  gutterIconPath: SUSPECT_ICON,
+  gutterIconSize: "contain",
+  overviewRulerColor: "rgba(154,160,166,0.7)",
+  overviewRulerLane: vscode.OverviewRulerLane.Right,
+  rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
 });
 
 // Resolve every tag/step that lands in `document`, returning [tour, step,
@@ -105,6 +121,7 @@ export async function updateDecorations(
   // of the line, per that tag's own notePosition (default "above").
   const gutterDecorations: vscode.DecorationOptions[] = [];
   const inlineDecorations: vscode.DecorationOptions[] = [];
+  const suspectDecorations: vscode.DecorationOptions[] = [];
 
   for (const [, step, , line] of store.activeEditorSteps!) {
     if (line === undefined || line === null || line >= editor.document.lineCount) {
@@ -120,6 +137,35 @@ export async function updateDecorations(
       hover.appendMarkdown(
         `${full ? "\n\n" : ""}[✎ 编辑注释](command:codeJumpTags.editNote?${args})`
       );
+    }
+
+    const suspect = step.id ? getSuspect(step.id) : undefined;
+    if (suspect) {
+      const sh = new vscode.MarkdownString();
+      sh.isTrusted = true;
+      sh.appendMarkdown(`⚠ 此标签可能失配\n\n`);
+      sh.appendMarkdown(`- 原身份: \`${suspect.original ?? "(无)"}\`\n`);
+      sh.appendMarkdown(`- 现内容: \`${suspect.current ?? "(无)"}\`\n\n`);
+      if (suspect.status === "current") {
+        const adopt = encodeURIComponent(JSON.stringify([step.id, suspect.line]));
+        const recover = encodeURIComponent(JSON.stringify([step.id]));
+        sh.appendMarkdown(
+          `[采纳新位置](command:codeJumpTags.promoteToOriginal?${adopt}) · ` +
+            `[找回原行](command:codeJumpTags.recoverToOriginal?${recover})`
+        );
+      } else {
+        const recover = encodeURIComponent(JSON.stringify([step.id]));
+        const move = encodeURIComponent(JSON.stringify([{ tagId: step.id }]));
+        sh.appendMarkdown(
+          `[找回原行](command:codeJumpTags.recoverToOriginal?${recover}) · ` +
+            `[移到光标行](command:codeJumpTags.moveTagToCursor?${move})`
+        );
+      }
+      suspectDecorations.push({
+        range: new vscode.Range(line, 0, line, 1000),
+        hoverMessage: sh
+      });
+      continue; // 可疑行不再进普通 gutter
     }
 
     // Gutter icon + whole-line hover live on the wide ClosedClosed range.
@@ -147,12 +193,14 @@ export async function updateDecorations(
 
   editor.setDecorations(TOUR_DECORATOR, gutterDecorations);
   editor.setDecorations(INLINE_NOTE_DECORATOR, inlineDecorations);
+  editor.setDecorations(SUSPECT_DECORATOR, suspectDecorations);
 }
 
 function clearDecorations(editor: vscode.TextEditor) {
   store.activeEditorSteps = undefined;
   editor.setDecorations(TOUR_DECORATOR, []);
   editor.setDecorations(INLINE_NOTE_DECORATOR, []);
+  editor.setDecorations(SUSPECT_DECORATOR, []);
 }
 
 // Persist line shifts off the keystroke path: re-render is immediate (via
