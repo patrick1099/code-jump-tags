@@ -149,25 +149,6 @@ export function retargetTag(
   return true;
 }
 
-// Recover a tag to `line` WITHOUT changing its identity. The user chose「以
-// original 为准」: drop the poisoned current, move to the line where original was
-// found, refresh current (text/pattern) from that line — but `original` stays.
-// Returns false if id is unknown or names a folder.
-export function healTagToLine(
-  store: LodestarStore,
-  id: string,
-  line: number,
-  text?: string,
-  pattern?: string
-): boolean {
-  const found = findNode(store, id);
-  if (!found || found.node.type !== "tag") return false;
-  found.node.line = line;
-  found.node.text = text;
-  found.node.pattern = pattern;
-  return true; // original 一概不动
-}
-
 function childrenOf(store: LodestarStore, parentId?: string): TreeNode[] {
   if (!parentId) return store.tree;
   const found = findNode(store, parentId);

@@ -146,19 +146,20 @@ export async function updateDecorations(
       sh.appendMarkdown(`⚠ 此标签可能失配\n\n`);
       sh.appendMarkdown(`- 原身份: \`${suspect.original ?? "(无)"}\`\n`);
       sh.appendMarkdown(`- 现内容: \`${suspect.current ?? "(无)"}\`\n\n`);
+      // 可疑态只给「真正能成」的动作:软可疑(current 命中)给「采纳新位置」(把候选行
+      // 升为新身份 = 更新 original)+「移到光标行」;硬可疑(都没命中)只给「移到光标行」。
+      // 「找回原行」已废弃删除:可疑 ⟺ original 在文件里找不到,而它又靠 original 去找,
+      // 必然扑空(设计矛盾,见 specs/2026-06-29-original-current-matching-design.md)。
+      const move = encodeURIComponent(JSON.stringify([{ tagId: step.id }]));
       if (suspect.status === "current") {
         const adopt = encodeURIComponent(JSON.stringify([step.id, suspect.line]));
-        const recover = encodeURIComponent(JSON.stringify([step.id]));
         sh.appendMarkdown(
           `[采纳新位置](command:codeJumpTags.promoteToOriginal?${adopt}) · ` +
-            `[找回原行](command:codeJumpTags.recoverToOriginal?${recover})`
+            `[移到光标行](command:codeJumpTags.moveTagToCursor?${move})`
         );
       } else {
-        const recover = encodeURIComponent(JSON.stringify([step.id]));
-        const move = encodeURIComponent(JSON.stringify([{ tagId: step.id }]));
         sh.appendMarkdown(
-          `[找回原行](command:codeJumpTags.recoverToOriginal?${recover}) · ` +
-            `[移到光标行](command:codeJumpTags.moveTagToCursor?${move})`
+          `[移到光标行](command:codeJumpTags.moveTagToCursor?${move})`
         );
       }
       suspectDecorations.push({
