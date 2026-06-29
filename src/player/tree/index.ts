@@ -43,6 +43,7 @@ class CodeTourTreeProvider
         if (s instanceof CodeTourStepNode) return s.step?.id;
         if (s instanceof CodeTourNode) {
           const folderId = s.tour.id.split("::").pop();
+          if (folderId === "__suspect__") return undefined; // 合成分组不可拖
           return folderId || undefined;
         }
         return undefined;
@@ -125,6 +126,10 @@ class CodeTourTreeProvider
 
   getTreeItem = (node: TreeItem) => node;
 
+  public refresh(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
   async getChildren(element?: TreeItem): Promise<TreeItem[] | undefined> {
     if (!element) {
       if (!store.hasTours && !store.activeTour) {
@@ -141,6 +146,21 @@ class CodeTourTreeProvider
         ) {
           tours.unshift(
             new CodeTourNode(store.activeTour.tour, this.extensionPath)
+          );
+        }
+
+        const { allSuspects } = await import("../../lodestar/suspect");
+        const suspectIds = allSuspects().map(s => s.id);
+        if (suspectIds.length > 0) {
+          const { getStore, getWorkspaceId } = await import(
+            "../../lodestar/persistence"
+          );
+          const { suspectTour } = await import("../../lodestar/adapter");
+          tours.unshift(
+            new CodeTourNode(
+              suspectTour(getStore(), getWorkspaceId(), suspectIds),
+              this.extensionPath
+            )
           );
         }
 
@@ -251,8 +271,14 @@ class CodeTourTreeProvider
   }
 }
 
+let s_provider: CodeTourTreeProvider | undefined;
+export function refreshTagsTree(): void {
+  s_provider?.refresh();
+}
+
 export function registerTreeProvider(extensionPath: string) {
   const treeDataProvider = new CodeTourTreeProvider(extensionPath);
+  s_provider = treeDataProvider;
   const treeView = window.createTreeView(`${EXTENSION_NAME}.tags`, {
     showCollapseAll: true,
     treeDataProvider,

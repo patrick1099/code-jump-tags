@@ -37,8 +37,10 @@ export async function recheckFile(file: string): Promise<void> {
   }));
   const infos = classifyFileTags(fileTags, text);
   const changed = setFileSuspects(file, infos);
-  if (changed && window.activeTextEditor) {
-    updateDecorations(window.activeTextEditor);
+  if (changed) {
+    const { refreshTagsTree } = await import("./tree");
+    refreshTagsTree();
+    if (window.activeTextEditor) updateDecorations(window.activeTextEditor);
   }
 }
 
