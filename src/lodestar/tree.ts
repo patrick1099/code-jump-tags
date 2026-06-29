@@ -128,6 +128,7 @@ export function findTagByLocation(
 // target line → pass undefined for both (weak anchor, as when tagging a blank
 // line). Returns true if a tag with `id` was found and updated; false if the id
 // is unknown or names a folder. note/id/createdAt/containing folder are untouched.
+// Also writes `original` (this is the human-explicit re-identify channel).
 export function retargetTag(
   store: LodestarStore,
   id: string,
@@ -143,6 +144,7 @@ export function retargetTag(
   found.node.file = file;
   found.node.line = line;
   found.node.text = anchorText;
+  found.node.original = anchorText; // 人显式动作 = 重设身份, 同时写裁判
   found.node.pattern = anchorPattern;
   return true;
 }

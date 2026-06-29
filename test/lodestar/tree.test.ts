@@ -322,3 +322,21 @@ describe("retargetTag", () => {
     expect(node.pattern).toBeUndefined();
   });
 });
+
+describe("retargetTag writes original", () => {
+  it("sets original to the new anchor text on a successful retarget", () => {
+    const store: any = {
+      version: 1,
+      tree: [{ type: "folder", id: "f", title: "x", children: [
+        { type: "tag", id: "t", note: "", file: "a.ts", line: 1, text: "old", original: "old" }
+      ] }]
+    };
+    const ok = retargetTag(store, "t", "b.ts", 9, "newline()", "^[^\\S\\n]*newline\\(\\)");
+    expect(ok).toBe(true);
+    const tag = store.tree[0].children[0];
+    expect(tag.text).toBe("newline()");
+    expect(tag.original).toBe("newline()");
+    expect(tag.file).toBe("b.ts");
+    expect(tag.line).toBe(9);
+  });
+});
