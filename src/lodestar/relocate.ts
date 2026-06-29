@@ -330,3 +330,21 @@ export function backfillAnchorText(store: LodestarStore): void {
   };
   walk(store.tree);
 }
+
+// One-time, idempotent: give every tag a frozen `original` identity anchor.
+// Missing original is seeded from current `text` (or patternToText(pattern)),
+// then never auto-changed again (only retargetTag / tag creation write it).
+export function backfillOriginal(store: LodestarStore): void {
+  const walk = (nodes: TreeNode[]): void => {
+    for (const node of nodes) {
+      if (node.type === "folder") {
+        walk(node.children);
+      } else if (node.original === undefined) {
+        const seed =
+          node.text ?? (node.pattern ? patternToText(node.pattern) : undefined);
+        if (seed !== undefined) node.original = seed;
+      }
+    }
+  };
+  walk(store.tree);
+}

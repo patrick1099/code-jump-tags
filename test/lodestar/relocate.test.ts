@@ -10,13 +10,14 @@ import {
   lineAnchorText,
   patternToText,
   backfillAnchorText,
+  backfillOriginal,
   resolveAnchoredLine,
   matchAnchor,
   resolveTagLine,
   type AnchorMatch
 } from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
-import { LodestarStore } from "../../src/lodestar/types";
+import type { LodestarStore } from "../../src/lodestar/types";
 
 const text = ["void a(){", "  doThing();", "}", "", "case SU_RepeatMode:"].join("\n");
 
@@ -365,5 +366,30 @@ describe("resolveTagLine", () => {
   it("returns stored line when everything misses", () => {
     const text = ["a", "b", "c"].join("\n");
     expect(resolveTagLine(text, 2, "zzz", "yyy")).toBe(2);
+  });
+});
+
+describe("backfillOriginal", () => {
+  function store(tag: any): LodestarStore {
+    return { version: 1, tree: [{ type: "folder", id: "f", title: "x", children: [tag] }] } as any;
+  }
+
+  it("fills original from text when missing", () => {
+    const s = store({ type: "tag", id: "t", note: "", file: "a", line: 1, text: "foo()" });
+    backfillOriginal(s);
+    expect((s.tree[0] as any).children[0].original).toBe("foo()");
+  });
+
+  it("fills original from pattern when no text", () => {
+    const s = store({ type: "tag", id: "t", note: "", file: "a", line: 1, pattern: "^[^\\S\\n]*bar;" });
+    backfillOriginal(s);
+    expect((s.tree[0] as any).children[0].original).toBe("bar;");
+  });
+
+  it("leaves an existing original untouched (idempotent)", () => {
+    const s = store({ type: "tag", id: "t", note: "", file: "a", line: 1, text: "new", original: "frozen" });
+    backfillOriginal(s);
+    backfillOriginal(s);
+    expect((s.tree[0] as any).children[0].original).toBe("frozen");
   });
 });
