@@ -9,7 +9,7 @@ import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
 import { findNode, LineEdit } from "../lodestar/tree";
 import {
   reanchorTag,
-  resolveAnchoredLine,
+  resolveTagLine,
   lineAnchorText,
   linePattern
 } from "../lodestar/relocate";
@@ -67,7 +67,7 @@ export async function getTourSteps(
           // reload (the stored line goes stale, but the line's text is found
           // again). This is the SAME recovery the jump command uses, so the
           // marker and the jump target always agree.
-          line = resolveAnchoredLine(contents, step.line, step.text, step.pattern) - 1;
+          line = resolveTagLine(contents, step.line, step.original, step.text, step.pattern) - 1;
         } else if (step.pattern) {
           const match = contents.match(new RegExp(step.pattern, "m"));
           if (match) {
