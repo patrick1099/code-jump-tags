@@ -243,6 +243,28 @@ export function findAnchorLine(
   return 0;
 }
 
+// Cold-recovery double match: try the immutable judge `original` first, then the
+// live cache `current`. Both via findAnchorLine (distance-first ring around
+// centerLine). 1-based. status tells the caller whether to heal silently
+// (original), offer a soft-suspect candidate (current), or give up (lost).
+export type AnchorMatch =
+  | { status: "original"; line: number }
+  | { status: "current"; line: number }
+  | { status: "lost"; line: number };
+
+export function matchAnchor(
+  text: string,
+  centerLine: number,
+  original?: string,
+  current?: string
+): AnchorMatch {
+  const o = findAnchorLine(text, centerLine, original);
+  if (o > 0) return { status: "original", line: o };
+  const c = findAnchorLine(text, centerLine, current);
+  if (c > 0) return { status: "current", line: c };
+  return { status: "lost", line: centerLine };
+}
+
 // The raw comparison anchor for a line: its trimmed text. undefined for a
 // blank/whitespace-only line (no usable anchor). Counterpart of linePattern,
 // but un-escaped — fed to the fuzzy resolver.
