@@ -498,6 +498,11 @@
           "group": "move@3"
         },
         {
+          "command": "codeJumpTags.promoteToOriginal",
+          "when": "viewItem =~ /suspect/",
+          "group": "suspect@1"
+        },
+        {
           "command": "codeJumpTags.newSubfolder",
           "when": "view == codeJumpTags.tags && viewItem =~ /^codeJumpTags.folder(\\.|$)/",
           "group": "change@0"
