@@ -13,6 +13,7 @@ function tagToStep(tag: TagNode): CodeTourStep {
   };
   if (tag.pattern) step.pattern = tag.pattern;
   if (tag.text) step.text = tag.text;
+  if (tag.original) step.original = tag.original;
   if (tag.notePosition) step.notePosition = tag.notePosition;
   return step;
 }

@@ -7,7 +7,8 @@ export interface TagNode {
   file: string;        // workspace-relative path
   line: number;        // 1-based
   pattern?: string;    // line-content regex for drift recovery (URL/legacy)
-  text?: string;       // raw trimmed line text — anchor for fuzzy recovery
+  text?: string;       // raw trimmed line text — current anchor (live, may be poisoned)
+  original?: string;   // identity anchor: trimmed line text at创建/人显式重设. 机器只读, 匹配裁判
   ref?: string | null; // reserved: pin to a commit/branch later
   createdAt: string;   // ISO timestamp
   notePosition?: "above" | "end"; // per-tag note placement; unset => "above"
