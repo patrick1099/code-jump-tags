@@ -4,6 +4,14 @@
 
 > **依赖 Plan 1 + Plan 2** 已落地。开工前确认 `npx vitest run` 全绿、`npm run build` 0 error，且可疑态在编辑器内已工作（灰?gutter + hover 按钮）。
 
+> ⚠️ **过时警告（2026-06-29，Plan 2 收尾删除了「找回原行」）。** 本计划下文凡是「修改/注册
+> `recoverToOriginal`」「引用 `healTagToLine`」的任务与片段（含 File Structure 第 27 行、Task「树右键
+> 动作」、把 `recoverToOriginal` 改为接受 node-或-id 的 Step 等）**全部作废**——这两个符号已在
+> commit 353067e 连根删除（理由：可疑 ⟺ original 在文件里找不到，而该动作又靠 original 去找，必然
+> 扑空；详见设计定稿的废弃说明 + `docs/code-jump-tags/功能-代码对照.md`）。**树侧可疑动作只保留
+> 〔采纳新位置〕(`promoteToOriginal`) +〔移到光标行〕(`moveTagToCursor`)**，硬可疑只给〔移到光标行〕。
+> Plan 3 开工前的预检校准须据此重写相关任务，不要照搬。
+
 **Goal:** 把可疑态搬到标签树里（? 角标 + 灰图标 + 右键动作），并加一个置顶的「待处理」虚拟汇总分组，最后一次性发布 0.7.0。
 
 **Architecture:** 树侧全部读 Plan 2 的运行时可疑注册表（`allSuspects`/`getSuspect`）；「待处理」是只读过滤视图（合成一个 CodeTour，标签仍住原文件夹）。可疑注册表变化时主动刷新树。发版走既有 tag-push CI，发版前 HOLD 等用户手动验证。

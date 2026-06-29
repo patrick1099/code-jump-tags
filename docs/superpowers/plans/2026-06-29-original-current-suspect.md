@@ -13,6 +13,8 @@
 >
 > 另：本计划 Task 1 的可疑分类模型（original 命中→健康跳过；仅 current 命中→软可疑；皆失→硬可疑）已被「全选剪切→改→粘回」手势的集成测试（`test/lodestar/{cold-recovery,select-all-roundtrip}.integration.test.ts`）侧面验证——只要被标记行内容还在，original 优先匹配使其判为健康、不会误报可疑。
 
+> ⚠️ **收尾修正（2026-06-29，终审后）：删除了「找回原行」(`recoverToOriginal`/`healTagToLine`)。** 它在任何可疑标签上结构性必然失败——可疑 ⟺ original 在文件里找不到，而该动作又靠同一个 `findAnchorLine(original)` 去找，必然扑空（它本想救的「current 被污染但 original 还在」场景已被 original-first 自愈、不会变可疑）。用户要的「漂移时更新身份」由〔采纳新位置〕(`promoteToOriginal`) 覆盖。故 Task 2 的 `healTagToLine`、Task 3 的 `recoverToOriginal`、Task 5 hover 里的「找回原行」按钮、Task 6 的对应命令/面板条目**均已连根删除**（commit 353067e）。最终：软可疑 hover =〔采纳新位置〕+〔移到光标行〕；硬可疑 =〔移到光标行〕。下文这些任务里仍写着「找回原行」的部分以本注为准、视为作废。
+
 **Goal:** 在编辑器内把「失配」的标签如实呈现（灰 + ?gutter、hover 双行对照 + 动作按钮），并提供「采纳新位置 / 找回原行 / 手动校验」三个动作与可配置的重新校验触发点。
 
 **Architecture:** 纯逻辑（可疑分类 `classifyFileTags` + 运行时可疑注册表，零 `vscode`，vitest 覆盖）+ 薄胶水（按文件 recheck、触发点监听、decorator 渲染、命令）。可疑状态**不持久化**，只活在运行时注册表里，靠触发点按文件填充。
