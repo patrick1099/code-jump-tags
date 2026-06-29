@@ -4,7 +4,9 @@ import {
   treeToAllTours,
   LOOSE_TOUR_ID,
   LOOSE_TITLE,
-  folderToTour
+  folderToTour,
+  suspectTour,
+  SUSPECT_TOUR_ID
 } from "../../src/lodestar/adapter";
 import { LodestarStore, FolderNode } from "../../src/lodestar/types";
 import { createEmptyStore } from "../../src/lodestar/tree";
@@ -125,5 +127,25 @@ describe("no synthetic loose group", () => {
     s.tree.push({ type: "tag", id: "t1", note: "n", file: "a.c", line: 1, createdAt: "t" });
     const all = treeToAllTours(s, "ws");
     expect(all.some(t => t.id.endsWith("__loose__"))).toBe(false);
+  });
+});
+
+describe("suspectTour", () => {
+  const store: any = {
+    version: 1,
+    tree: [{ type: "folder", id: "f", title: "x", children: [
+      { type: "tag", id: "t1", note: "n1", file: "a.ts", line: 1 },
+      { type: "tag", id: "t2", note: "n2", file: "b.ts", line: 2 },
+      { type: "tag", id: "t3", note: "n3", file: "c.ts", line: 3 }
+    ] }]
+  };
+  it("collects only suspect tags, in tree order, with a counted title", () => {
+    const tour = suspectTour(store, "ws", ["t3", "t1"]);
+    expect(tour.id).toBe(`ws::${SUSPECT_TOUR_ID}`);
+    expect(tour.title).toBe("⚠ 待处理 (2)");
+    expect(tour.steps.map(s => s.id)).toEqual(["t1", "t3"]);
+  });
+  it("empty when no suspects", () => {
+    expect(suspectTour(store, "ws", []).steps).toEqual([]);
   });
 });

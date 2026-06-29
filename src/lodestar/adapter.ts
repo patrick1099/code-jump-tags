@@ -62,3 +62,32 @@ export function treeToAllTours(
 
   return tours;
 }
+
+export const SUSPECT_TOUR_ID = "__suspect__";
+
+// Read-only "待处理" filter view: a synthetic tour gathering the suspect tags
+// (by id, in tree order). Tags still live in their real folders; this only
+// mirrors them for one-shot triage.
+export function suspectTour(
+  store: LodestarStore,
+  workspaceId: string,
+  suspectIds: string[]
+): CodeTour {
+  const want = new Set(suspectIds);
+  const tags: TagNode[] = [];
+  const walk = (nodes: (FolderNode | TagNode)[]): void => {
+    for (const node of nodes) {
+      if (node.type === "tag") {
+        if (want.has(node.id)) tags.push(node);
+      } else {
+        walk(node.children as (FolderNode | TagNode)[]);
+      }
+    }
+  };
+  walk(store.tree as (FolderNode | TagNode)[]);
+  return {
+    id: `${workspaceId}::${SUSPECT_TOUR_ID}`,
+    title: `⚠ 待处理 (${tags.length})`,
+    steps: tags.map(tagToStep)
+  };
+}
