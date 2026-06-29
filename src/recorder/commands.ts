@@ -435,6 +435,7 @@ export function registerRecorderCommands() {
         line,
         pattern,
         text,
+        original: text,
         createdAt: new Date().toISOString()
       };
       const inbox = getOrCreateInbox(getStore(), newFolderId);
