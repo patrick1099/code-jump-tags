@@ -4,6 +4,15 @@
 
 > **依赖 Plan 1**（`2026-06-29-original-current-core.md`）已落地：`TagNode.original`、`matchAnchor`/`resolveTagLine`/`findAnchorLine`/`backfillOriginal`、`retargetTag` 写 original、建标签写 original。开工前确认 Plan 1 已 merge 到 main 且 `npx vitest run` 全绿。
 
+> **预检校准（2026-06-29，对照 Plan 1 已实现代码逐锚点核验，结论：本计划无需结构性调整）。** 已确认存在且形状一致：`src/extension.ts` 的 `activate`（`export async function`）、decorator `updateDecorations`/`clearDecorations` 及其循环 `for (const [, step, , line] of store.activeEditorSteps!)`（`line` 为 **0-based** 已解析显示行）、commands.ts 的 `./relocate`(`resolveTagLine,linePattern,lineAnchorText`)与 `./tree` import 组、`getStore/saveStore`(persistence)、`getRelativePath(root,filePath)`(utils)、`Uri/window/workspace`(vscode)、`undoTagMove`、`registerLodestarCommands` 的 `commands.registerCommand(...)` 列表、`gotoLocation`、tree.ts `findNode`、selection.ts 已 import `LodestarStore/TagNode/TreeNode/findNode`、`moveTagToCursor` 命令、package.json `confirmDelete`/`restoreFromTrash`/`commandPalette`。实施时仅留意以下 4 点：
+>
+> 1. **Task 5 硬可疑 hover 调 `moveTagToCursor?[{tagId: step.id}]`**：真实 `moveTagToCursor(node: any)`（commands.ts:394）按 0.6.1 惯例解析 `node?.tagLink?.id ?? node?.tagId`——开工时先确认它读得到 `.tagId`，否则按它真正接受的形状传参。
+> 2. **Task 5 标记落点**：suspect 行用循环里的 0-based `line`（getTourSteps→resolveTagLine 算出的显示行），不要用 1-based 的 `suspect.line`；后者只进 hover 的命令参数（`promoteToOriginal` 内部 `doc.lineAt(line-1)` 要 1-based）。两者都源自同一 `matchAnchor`，对软可疑会指向同一候选行——保持这条不变量即可。
+> 3. **Task 4 的 `createFileSystemWatcher("**/*")`** 在大仓库会对每个文件改动触发；`recheckFile` 对无标签文件是空操作（`collectTagsInFile` 返回空→早退），成本有界，但可考虑排除 `node_modules`/产物目录或只 watch「有标签的文件」以降噪。非阻塞。
+> 4. **Task 3 Step 4 故意不 build**（动态 `import("../player/recheck")` 要等 Task 4 建文件）——保持该跨任务顺序，build 留到 Task 4 末尾。
+>
+> 另：本计划 Task 1 的可疑分类模型（original 命中→健康跳过；仅 current 命中→软可疑；皆失→硬可疑）已被「全选剪切→改→粘回」手势的集成测试（`test/lodestar/{cold-recovery,select-all-roundtrip}.integration.test.ts`）侧面验证——只要被标记行内容还在，original 优先匹配使其判为健康、不会误报可疑。
+
 **Goal:** 在编辑器内把「失配」的标签如实呈现（灰 + ?gutter、hover 双行对照 + 动作按钮），并提供「采纳新位置 / 找回原行 / 手动校验」三个动作与可配置的重新校验触发点。
 
 **Architecture:** 纯逻辑（可疑分类 `classifyFileTags` + 运行时可疑注册表，零 `vscode`，vitest 覆盖）+ 薄胶水（按文件 recheck、触发点监听、decorator 渲染、命令）。可疑状态**不持久化**，只活在运行时注册表里，靠触发点按文件填充。
