@@ -6,6 +6,7 @@ import {
   normalizeWs,
   similarity,
   resolveLineFuzzy,
+  findAnchorLine,
   lineAnchorText,
   patternToText,
   backfillAnchorText,
@@ -291,5 +292,26 @@ describe("resolveAnchoredLine", () => {
   });
   it("returns the line when neither anchor is given", () => {
     expect(resolveAnchoredLine(text, 3)).toBe(3);
+  });
+});
+
+describe("findAnchorLine", () => {
+  const text = ["alpha", "beta", "gamma", "delta"].join("\n");
+
+  it("returns the center line when it matches", () => {
+    expect(findAnchorLine(text, 2, "beta")).toBe(2);
+  });
+
+  it("finds a moved line by distance-first ring search", () => {
+    expect(findAnchorLine(text, 1, "delta")).toBe(4);
+  });
+
+  it("returns 0 when nothing clears the bar (no blind fallback)", () => {
+    expect(findAnchorLine(text, 2, "nonexistent-zzz")).toBe(0);
+  });
+
+  it("returns 0 for empty/blank anchor", () => {
+    expect(findAnchorLine(text, 2, "")).toBe(0);
+    expect(findAnchorLine(text, 2, undefined)).toBe(0);
   });
 });

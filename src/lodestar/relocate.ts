@@ -198,6 +198,51 @@ export function resolveLineFuzzy(
   return centerLine;
 }
 
+// Strict distance-first resolver: like resolveLineFuzzy but returns 0 (not the
+// center line) when NO line clears the similarity bar, so callers can tell a
+// real match from a miss. 1-based; 0 = miss.
+export function findAnchorLine(
+  text: string,
+  centerLine: number,
+  anchorText?: string
+): number {
+  if (!anchorText) return 0;
+  const target = normalizeWs(anchorText);
+  if (target.length === 0) return 0;
+
+  const lines = text.split(/\r?\n/);
+  const center0 = centerLine - 1;
+  const simAt = (i: number): number => {
+    const l = lines[i];
+    return l === undefined ? -1 : similarity(normalizeWs(l), target);
+  };
+
+  if (center0 >= 0 && center0 < lines.length && simAt(center0) >= SIMILARITY_THRESHOLD) {
+    return centerLine;
+  }
+
+  for (const R of SEARCH_RADII) {
+    const lo = Math.max(0, center0 - R);
+    const hi = Math.min(lines.length - 1, center0 + R);
+    let best = -1;
+    let bestSim = -1;
+    let bestDist = Infinity;
+    for (let i = lo; i <= hi; i++) {
+      const s = simAt(i);
+      if (s < SIMILARITY_THRESHOLD) continue;
+      const d = Math.abs(i - center0);
+      if (s > bestSim || (s === bestSim && d < bestDist)) {
+        best = i;
+        bestSim = s;
+        bestDist = d;
+      }
+    }
+    if (best >= 0) return best + 1;
+    if (!isFinite(R)) break;
+  }
+  return 0;
+}
+
 // The raw comparison anchor for a line: its trimmed text. undefined for a
 // blank/whitespace-only line (no usable anchor). Counterpart of linePattern,
 // but un-escaped — fed to the fuzzy resolver.
