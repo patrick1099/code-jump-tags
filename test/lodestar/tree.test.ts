@@ -268,7 +268,7 @@ describe("isSelfOrDescendant (folder-drag guard)", () => {
   });
 });
 
-import { retargetTag } from "../../src/lodestar/tree";
+import { retargetTag, healTagToLine } from "../../src/lodestar/tree";
 
 describe("retargetTag", () => {
   it("re-anchors a tag's file/line/text/pattern and returns true", () => {
@@ -338,5 +338,22 @@ describe("retargetTag writes original", () => {
     expect(tag.original).toBe("newline()");
     expect(tag.file).toBe("b.ts");
     expect(tag.line).toBe(9);
+  });
+});
+
+describe("healTagToLine keeps original", () => {
+  it("updates line/text/pattern but leaves original untouched", () => {
+    const store: any = {
+      version: 1,
+      tree: [{ type: "folder", id: "f", title: "x", children: [
+        { type: "tag", id: "t", note: "", file: "a.ts", line: 1, text: "poison", original: "frozen", pattern: "p" }
+      ] }]
+    };
+    expect(healTagToLine(store, "t", 7, "fresh", "^fresh")).toBe(true);
+    const tag = store.tree[0].children[0];
+    expect(tag.line).toBe(7);
+    expect(tag.text).toBe("fresh");
+    expect(tag.pattern).toBe("^fresh");
+    expect(tag.original).toBe("frozen"); // ← 关键: original 不动
   });
 });

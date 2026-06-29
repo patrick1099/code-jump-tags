@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createEmptyStore, addTag, createFolder } from "../../src/lodestar/tree";
-import { pruneCovered, collectTagsUnder } from "../../src/lodestar/selection";
+import { pruneCovered, collectTagsUnder, collectTagsInFile } from "../../src/lodestar/selection";
 import { TagNode } from "../../src/lodestar/types";
 
 function tag(id: string): TagNode {
@@ -40,5 +40,26 @@ describe("collectTagsUnder", () => {
     addTag(s, tag("a"), "f1");
     const tags = collectTagsUnder(s, ["f1", "a"]);
     expect(tags.map(t => t.id)).toEqual(["a"]);
+  });
+});
+
+describe("collectTagsInFile", () => {
+  const store: any = {
+    version: 1,
+    tree: [
+      { type: "folder", id: "f", title: "x", children: [
+        { type: "tag", id: "t1", note: "", file: "a.ts", line: 1 },
+        { type: "tag", id: "t2", note: "", file: "b.ts", line: 2 },
+        { type: "folder", id: "g", title: "y", children: [
+          { type: "tag", id: "t3", note: "", file: "a.ts", line: 3 }
+        ] }
+      ] }
+    ]
+  };
+  it("returns all tags in the given file across nesting", () => {
+    expect(collectTagsInFile(store, "a.ts").map((t: any) => t.id)).toEqual(["t1", "t3"]);
+  });
+  it("returns [] for a file with no tags", () => {
+    expect(collectTagsInFile(store, "z.ts")).toEqual([]);
   });
 });
