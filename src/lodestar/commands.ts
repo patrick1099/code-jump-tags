@@ -24,7 +24,7 @@ import {
   toggleNotePosition
 } from "./editThread";
 import { getStore, saveStore } from "./persistence";
-import { resolveLine, linePattern, lineAnchorText } from "./relocate";
+import { resolveTagLine, linePattern, lineAnchorText } from "./relocate";
 import {
   createFolder,
   findNode,
@@ -91,7 +91,8 @@ export async function gotoLocation(
   const uri = Uri.joinPath(root, file);
   const doc = await workspace.openTextDocument(uri);
   const text = doc.getText();
-  const resolved = resolveLine(text, line, pattern);
+  const tag = findTagByLocation(getStore(), file, line);
+  const resolved = resolveTagLine(text, line, tag?.original, tag?.text, pattern);
   const zero = Math.max(0, resolved - 1);
   const editor = await window.showTextDocument(doc, { preview: false });
   const pos = new Position(zero, 0);
