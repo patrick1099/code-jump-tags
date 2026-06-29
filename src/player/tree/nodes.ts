@@ -12,6 +12,7 @@ import { CONTENT_URI, EXTENSION_NAME, FS_SCHEME } from "../../constants";
 import { CodeTour, CodeTourStep, store } from "../../store";
 import { progress } from "../../store/storage";
 import { getFileUri, getStepLabel, getWorkspaceUri } from "../../utils";
+import { getSuspect } from "../../lodestar/suspect";
 
 function isRecording(tour: CodeTour) {
   return (
@@ -160,7 +161,20 @@ export class CodeTourStepNode extends TreeItem {
       this.iconPath = ThemeIcon.File;
     }
 
+    const suspect = step.id ? getSuspect(step.id) : undefined;
+    if (suspect) {
+      this.description = suspect.status === "current" ? "⚠ 失配·有候选" : "⚠ 失配";
+      this.iconPath = new ThemeIcon(
+        "question",
+        // @ts-ignore
+        new ThemeColor("disabledForeground")
+      );
+    }
+
     const contextValues = ["codeJumpTags.tag"];
+    if (suspect) {
+      contextValues.push("suspect");
+    }
     if (stepNumber > 0) {
       contextValues.push("hasPrevious");
     }
