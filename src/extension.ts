@@ -7,6 +7,7 @@ import { initializeGitApi } from "./git";
 import { registerLiveShareModule } from "./liveShare";
 import { registerLodestarCommands } from "./lodestar/commands";
 import { registerPlayerModule } from "./player";
+import { registerRecheckTriggers } from "./player/recheck";
 import { registerRecorderModule } from "./recorder";
 import { store } from "./store";
 import { startCodeTour, startDefaultTour } from "./store/actions";
@@ -87,6 +88,7 @@ class URIHandler implements vscode.UriHandler {
 
 export async function activate(context: vscode.ExtensionContext) {
   registerPlayerModule(context);
+  registerRecheckTriggers(context);
   registerRecorderModule();
   registerLiveShareModule();
   registerLodestarCommands(context);
