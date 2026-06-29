@@ -10,7 +10,9 @@ import {
   lineAnchorText,
   patternToText,
   backfillAnchorText,
-  resolveAnchoredLine
+  resolveAnchoredLine,
+  matchAnchor,
+  type AnchorMatch
 } from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
 import { LodestarStore } from "../../src/lodestar/types";
@@ -313,5 +315,30 @@ describe("findAnchorLine", () => {
   it("returns 0 for empty/blank anchor", () => {
     expect(findAnchorLine(text, 2, "")).toBe(0);
     expect(findAnchorLine(text, 2, undefined)).toBe(0);
+  });
+});
+
+describe("matchAnchor (二重匹配)", () => {
+  it("matches original first and reports original", () => {
+    const text = ["int foo(a)", "int bar(b)"].join("\n");
+    expect(matchAnchor(text, 1, "int foo(a)", "int foo(a)")).toEqual({
+      status: "original",
+      line: 1
+    });
+  });
+
+  it("falls to current when original is gone (renamed line)", () => {
+    // original 描述老名字(已不在), current 描述改名后的行(在第2行)
+    const text = ["x", "int computeCrc16(buf)"].join("\n");
+    const m = matchAnchor(text, 1, "void oldCompute()", "int computeCrc16(buf)");
+    expect(m).toEqual({ status: "current", line: 2 });
+  });
+
+  it("reports lost when neither matches, line = center fallback", () => {
+    const text = ["totally", "different"].join("\n");
+    expect(matchAnchor(text, 2, "old-aaa", "new-bbb")).toEqual({
+      status: "lost",
+      line: 2
+    });
   });
 });
