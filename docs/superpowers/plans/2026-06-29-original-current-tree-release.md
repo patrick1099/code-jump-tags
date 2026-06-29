@@ -4,13 +4,21 @@
 
 > **依赖 Plan 1 + Plan 2** 已落地。开工前确认 `npx vitest run` 全绿、`npm run build` 0 error，且可疑态在编辑器内已工作（灰?gutter + hover 按钮）。
 
-> ⚠️ **过时警告（2026-06-29，Plan 2 收尾删除了「找回原行」）。** 本计划下文凡是「修改/注册
-> `recoverToOriginal`」「引用 `healTagToLine`」的任务与片段（含 File Structure 第 27 行、Task「树右键
-> 动作」、把 `recoverToOriginal` 改为接受 node-或-id 的 Step 等）**全部作废**——这两个符号已在
-> commit 353067e 连根删除（理由：可疑 ⟺ original 在文件里找不到，而该动作又靠 original 去找，必然
-> 扑空；详见设计定稿的废弃说明 + `docs/code-jump-tags/功能-代码对照.md`）。**树侧可疑动作只保留
-> 〔采纳新位置〕(`promoteToOriginal`) +〔移到光标行〕(`moveTagToCursor`)**，硬可疑只给〔移到光标行〕。
-> Plan 3 开工前的预检校准须据此重写相关任务，不要照搬。
+> **预检校准（2026-06-29，对照已落地的 Plan 1 + Plan 2 代码逐锚点核验。「找回原行」删除已落实进下文任务，不再是待办）。** 下文已据 Plan 2 收尾删除 `recoverToOriginal`/`healTagToLine`（commit 353067e）重写：**树侧可疑动作只保留〔采纳新位置〕(`promoteToOriginal`)**；〔移到光标行〕(`moveTagToCursor`) 已存在于树右键菜单（`view/item/context` 的 `move@2`，对所有 tag 生效，line 490），故 suspect 标签天然就有它、无需另加；硬可疑只剩〔移到光标行〕。
+>
+> **已核验存在且形状一致的锚点：**
+> - `src/player/tree/nodes.ts`：`CodeTourStepNode`、`const contextValues = ["codeJumpTags.tag"];`(line 163)、`ThemeColor`/`ThemeIcon` 已 import、`step.id` 是真字段；suspect 块插在 163 之前可覆盖前面（126-161）的 `iconPath` 赋值。`CodeTourStepNode` 当前**未**设 `this.description`，新设属附加。
+> - `src/player/tree/index.ts`：`getChildren` 根分支（`if (!element)`→`store.tours.map`→activeTour `unshift`→`return tours`，line 128-148）、`handleDrag` 的 `.map(s => …)` 含 `s instanceof CodeTourNode { const folderId = s.tour.id.split("::").pop(); return folderId || undefined; }`(line 44-47)、`_onDidChangeTreeData` EventEmitter(line 94)、`getTreeItem`(line 126)、`registerTreeProvider` 里 `const treeDataProvider = new CodeTourTreeProvider(extensionPath);`(line 255)。
+> - `src/lodestar/persistence.ts`：`getWorkspaceId()`(line 24)、`getStore()` 已导出。
+> - `src/lodestar/adapter.ts`：`tagToStep`（文件内私有，`suspectTour` 同文件可直接调）、`folderToTour`，import 含 `CodeTour/CodeTourStep`(type)、`FolderNode/LodestarStore/TagNode`。
+> - `src/player/recheck.ts`：`recheckFile` 变更分支当前为 `const changed = setFileSuspects(file, infos); if (changed && window.activeTextEditor) { updateDecorations(window.activeTextEditor); }`（Task 4 Step 4 以此为 old_string）。
+> - `package.json`：`"version": "0.6.1"`(line 6)、`menus."view/item/context"`(line 449，现有 tag 菜单用 `viewItem =~ /^codeJumpTags.tag/`，Task 5 用 `/suspect/` 子串匹配——一致)；`CHANGELOG.md`、`.github/workflows/publish.yml` 均在。
+>
+> **实施留意：**
+> 1. **合成「待处理」分组的 contextValue**：其 `CodeTourNode` 默认 `contextValue="codeJumpTags.folder"`，会让文件夹右键菜单（重命名/删除文件夹）出现在它上面——但这与现有「(未分组)」合成组（`__loose__`）行为**完全一致**：点了也因 `findNode("__suspect__")` 落空而 no-op。可接受；若要更干净，给合成组单独 contextValue 并调 folder 菜单的 `when`。
+> 2. **可疑注册表不是 mobx store**，其变化**不会**触发 tree provider 构造函数里的 `reaction` 自动刷新——这正是 Task 4 要手动 `refreshTagsTree()` 的原因。
+> 3. **Task 5 只加 `promoteToOriginal`**（`when: viewItem =~ /suspect/`），**不要**加 `recoverToOriginal`；`moveTagToCursor` 已被 `move@2` 覆盖。
+> 4. **待处理 分组置顶**：Step 1 的 `unshift` 放在 activeTour `unshift` 之后，使「待处理」落在 index 0（最顶）。
 
 **Goal:** 把可疑态搬到标签树里（? 角标 + 灰图标 + 右键动作），并加一个置顶的「待处理」虚拟汇总分组，最后一次性发布 0.7.0。
 
@@ -32,7 +40,7 @@
 
 ## File Structure
 
-- `src/lodestar/commands.ts`（改）— `promoteToOriginal`/`recoverToOriginal` 改为接受 node-或-id，promote 默认候选行取自注册表。
+- `src/lodestar/commands.ts`（改）— `promoteToOriginal` 改为接受 node-或-id，promote 默认候选行取自注册表。
 - `src/player/tree/nodes.ts`（改）— 可疑标签 ? 角标 + 灰图标 + `.suspect` contextValue。
 - `src/lodestar/adapter.ts`（改，纯）— `SUSPECT_TOUR_ID` + `suspectTour`。
 - `src/player/tree/index.ts`（改）—「待处理」分组、拖拽 guard、`refreshTagsTree` 导出。
@@ -47,11 +55,11 @@
 ## Task 1: 动作命令兼容树节点调用
 
 **Files:**
-- Modify: `src/lodestar/commands.ts`（`promoteToOriginal`/`recoverToOriginal`）
+- Modify: `src/lodestar/commands.ts`（`promoteToOriginal`）
 
 **Interfaces:**
 - Consumes: `getSuspect`（suspect.ts）。
-- Produces: `promoteToOriginal(arg: string | any, line?: number)`、`recoverToOriginal(arg: string | any)` —— `arg` 可为 tagId 字符串（hover 命令链接）或树节点（右键，含 `tagLink.id`/`tagId`）。promote 的 `line` 缺省时取 `getSuspect(id)?.line`（软可疑候选），再缺省用光标行。
+- Produces: `promoteToOriginal(arg: string | any, line?: number)` —— `arg` 可为 tagId 字符串（hover 命令链接）或树节点（右键，含 `tagLink.id`/`tagId`）。promote 的 `line` 缺省时取 `getSuspect(id)?.line`（软可疑候选），再缺省用光标行。
 
 - [ ] **Step 1: 加 import**
 
@@ -97,20 +105,7 @@ export async function promoteToOriginal(arg: string | any, line?: number) {
   window.setStatusBarMessage("Code Jump Tags: 已采纳为新身份", 2000);
 }
 ```
-
-把 `recoverToOriginal` 开头改为：
-
-```ts
-export async function recoverToOriginal(arg: string | any) {
-  const tagId = tagIdOf(arg);
-  if (!tagId) {
-    window.showInformationMessage("Code Jump Tags: 找不到该标签");
-    return;
-  }
-  const store = getStore();
-  const found = findNode(store, tagId);
-  // ...（其余函数体保持 Plan 2 原样，仅把 `tagId` 来源换成上面归一化的值）
-```
+（`recoverToOriginal` 已在 Plan 2 收尾删除，本任务不再涉及——只改 `promoteToOriginal` 一处。）
 
 - [ ] **Step 3: 构建通过**
 
@@ -376,7 +371,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 1: 加菜单项**
 
-在 `package.json` 的 `menus."view/item/context"` 数组里追加（紧跟现有 tag 菜单组之后）：
+在 `package.json` 的 `menus."view/item/context"` 数组里追加（紧跟现有 tag 菜单组之后，注意补前导逗号）。**只加〔采纳新位置〕**——〔移到光标行〕(`moveTagToCursor`) 已有 `move@2` 菜单对所有 tag（含可疑）生效，无需重复：
 
 ```json
         ,
@@ -384,11 +379,6 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
           "command": "codeJumpTags.promoteToOriginal",
           "when": "viewItem =~ /suspect/",
           "group": "suspect@1"
-        },
-        {
-          "command": "codeJumpTags.recoverToOriginal",
-          "when": "viewItem =~ /suspect/",
-          "group": "suspect@2"
         }
 ```
 
@@ -401,7 +391,7 @@ Expected: `ok` + 0 error。
 
 ```bash
 git add package.json
-git commit -m "feat(code-jump-tags): 树右键 采纳新位置/找回原行(仅可疑标签)
+git commit -m "feat(code-jump-tags): 树右键 采纳新位置(仅可疑标签)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -424,9 +414,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```markdown
 ## 0.7.0 - 2026-06-29
 - 标签现在分「身份」和「位置」两本账:身份(original)只有你亲手确认才会变,机器自动追踪只动位置。重命名变量、整行剪切粘贴,标签都跟得住;关掉窗口后被 git pull / 外部工具改了,重开时也按身份把标签找回真行。
-- 当一行内容变得和标签身份差太多、机器认不出了,标签会进入「可疑」态:编辑器 gutter 变灰带「?」,鼠标悬停显示「原身份 vs 现内容」两行对照,并给两个一键动作——
-  - 「采纳新位置」:把现在这行认作新身份(对应你改了名);
-  - 「找回原行」:丢掉跑偏的位置,按原身份找回真行(对应误改/污染)。
+- 当一行内容变得和标签身份差太多、机器认不出了,标签会进入「可疑」态:编辑器 gutter 变灰带「?」,鼠标悬停显示「原身份 vs 现内容」两行对照,并给一键动作——
+  - 「采纳新位置」:把现在这行认作新身份(对应你改了名/重构);
+  - 实在认不出新位置时(硬可疑),用「移到光标行」手动把标签重指到光标处。
 - 标签树里可疑标签带「?」角标,顶部多一个「待处理」分组,把所有可疑标签汇总到一处,便于一次清理(修完自动移出)。也能在树里右键这两个动作。
 - 可疑检查只在「落定点」按文件做、不打扰你打字:默认在切回窗口 / 打开切换编辑器 / 文件被外部改动时检查;可在设置里增减(保存时、空闲后),也能用命令「重新校验当前文件的标签」手动来一发。
 ```
@@ -443,7 +433,7 @@ npm run build && npx vitest run
 npx vsce package
 "/c/Users/dell/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd" --install-extension code-jump-tags-*.vsix --force
 ```
-Reload Window 后端到端验证整套 0.7.0：建标签→改名→重开找回；制造可疑→灰?+hover/树角标/待处理分组→采纳新位置 & 找回原行均生效;切换触发点设置生效;手动校验命令生效。
+Reload Window 后端到端验证整套 0.7.0：建标签→改名→重开找回；制造可疑→灰?+hover/树角标/待处理分组→采纳新位置 & 移到光标行均生效;切换触发点设置生效;手动校验命令生效。
 
 - [ ] **Step 5: Commit**
 
@@ -506,17 +496,17 @@ Expected: `completed / success`(Node 20 弃用注解是非致命警告,可忽略
 **Spec coverage（本期 = 树 ? 角标 +「待处理」分组 + 树右键动作 + 发版）：**
 - 树 ? 角标 + 灰图标：Task 2 ✓
 - 「待处理」只读汇总分组(标签仍住原文件夹、修完自动移出)：Task 3 `suspectTour` + Task 4 provider(读 `allSuspects`，注册表清空即从分组消失) ✓
-- 树右键 采纳新位置/找回原行(仅可疑)：Task 1(命令兼容树节点) + Task 5(菜单) ✓
+- 树右键 采纳新位置(仅可疑) + 移到光标行(已有 move@2 覆盖)：Task 1(命令兼容树节点) + Task 5(菜单) ✓
 - 注册表变化刷新树：Task 4 `refreshTagsTree` ✓
 - 合成分组不可拖：Task 4 Step 2 guard ✓
 - 版本/CHANGELOG/发版(HOLD)：Task 6/7 ✓
-- 铁律：树侧无自动写 original;「采纳」经 retargetTag、「找回」经 healTagToLine(不写 original) ✓
+- 铁律：树侧无自动写 original;「采纳新位置」经 retargetTag(用户显式触发才写 original);「找回原行」已删除(见顶部校准说明) ✓
 
 **Placeholder scan:** 无 TBD/TODO;代码步骤均给完整代码与命令。Task 7 的 `<run-id>` 是 gh 输出占位,已给取值命令。
 
-**Type consistency:** `suspectTour(store, workspaceId, suspectIds)`/`SUSPECT_TOUR_ID` 在 adapter 定义、tree provider 调用一致;`refreshTagsTree` 在 tree/index 定义、recheck 调用一致;`promoteToOriginal`/`recoverToOriginal` 接受 node-或-id 与 Plan 2 hover 的 `[id,line]`/`[id]` 调用、树菜单的 node 调用都兼容;`.suspect` contextValue(nodes.ts) 与菜单 `viewItem =~ /suspect/`(package.json) 一致。
+**Type consistency:** `suspectTour(store, workspaceId, suspectIds)`/`SUSPECT_TOUR_ID` 在 adapter 定义、tree provider 调用一致;`refreshTagsTree` 在 tree/index 定义、recheck 调用一致;`promoteToOriginal` 接受 node-或-id 与 Plan 2 hover 的 `[id,line]` 调用、树菜单的 node 调用都兼容;`.suspect` contextValue(nodes.ts) 与菜单 `viewItem =~ /suspect/`(package.json) 一致。
 
-**跨 Plan 一致性:** 本计划消费 Plan 2 的 `getSuspect`/`allSuspects`/`setFileSuspects`/`recheckFile`、Plan 1 的 `retargetTag`(写 original)/`findAnchorLine`,签名一致。
+**跨 Plan 一致性:** 本计划消费 Plan 2 的 `getSuspect`/`allSuspects`/`setFileSuspects`/`recheckFile`、Plan 1 的 `retargetTag`(写 original),签名一致。
 
 ---
 
