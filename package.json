@@ -52,6 +52,31 @@
           "type": "boolean",
           "default": true,
           "description": "Ask before deleting tags or folders. Deleted entries can be restored from trash."
+        },
+        "codeJumpTags.recheckOn.focus": {
+          "type": "boolean",
+          "default": true,
+          "description": "切回窗口(重获焦点)时,重新校验当前文件的标签是否失配。"
+        },
+        "codeJumpTags.recheckOn.open": {
+          "type": "boolean",
+          "default": true,
+          "description": "打开/切换到某编辑器时,重新校验该文件的标签是否失配。"
+        },
+        "codeJumpTags.recheckOn.externalChange": {
+          "type": "boolean",
+          "default": true,
+          "description": "文件被外部(git pull / 其它工具)改动时,重新校验其标签是否失配。"
+        },
+        "codeJumpTags.recheckOn.save": {
+          "type": "boolean",
+          "default": false,
+          "description": "保存时重新校验该文件的标签是否失配。"
+        },
+        "codeJumpTags.recheckOn.idle": {
+          "type": "boolean",
+          "default": false,
+          "description": "编辑停顿(空闲)后重新校验当前文件的标签是否失配。"
         }
       }
     },
@@ -210,6 +235,21 @@
         "title": "从回收站恢复",
         "category": "Code Jump Tags",
         "icon": "$(history)"
+      },
+      {
+        "command": "codeJumpTags.promoteToOriginal",
+        "title": "采纳为新身份",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.recoverToOriginal",
+        "title": "找回原行",
+        "category": "Code Jump Tags"
+      },
+      {
+        "command": "codeJumpTags.recheckCurrentFile",
+        "title": "重新校验当前文件的标签",
+        "category": "Code Jump Tags"
       }
     ],
     "menus": {
@@ -304,6 +344,14 @@
         },
         {
           "command": "codeJumpTags.notePositionEnd",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.promoteToOriginal",
+          "when": "false"
+        },
+        {
+          "command": "codeJumpTags.recoverToOriginal",
           "when": "false"
         }
       ],
