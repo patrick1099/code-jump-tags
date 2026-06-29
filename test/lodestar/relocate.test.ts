@@ -12,6 +12,7 @@ import {
   backfillAnchorText,
   resolveAnchoredLine,
   matchAnchor,
+  resolveTagLine,
   type AnchorMatch
 } from "../../src/lodestar/relocate";
 import { LineEdit } from "../../src/lodestar/tree";
@@ -340,5 +341,29 @@ describe("matchAnchor (二重匹配)", () => {
       status: "lost",
       line: 2
     });
+  });
+});
+
+describe("resolveTagLine", () => {
+  it("prefers original-matched line", () => {
+    const text = ["a", "needle()", "b"].join("\n");
+    expect(resolveTagLine(text, 1, "needle()", "needle()")).toBe(2);
+  });
+
+  it("uses current when original fails", () => {
+    const text = ["a", "renamed()", "b"].join("\n");
+    expect(resolveTagLine(text, 1, "oldname()", "renamed()")).toBe(2);
+  });
+
+  it("falls back to pattern when both anchors miss", () => {
+    const text = ["a", "  target;", "b"].join("\n");
+    // 故意 original/current 都对不上, 只有 pattern 命中
+    const pattern = "^[^\\S\\n]*target;";
+    expect(resolveTagLine(text, 1, "zzz", "yyy", pattern)).toBe(2);
+  });
+
+  it("returns stored line when everything misses", () => {
+    const text = ["a", "b", "c"].join("\n");
+    expect(resolveTagLine(text, 2, "zzz", "yyy")).toBe(2);
   });
 });

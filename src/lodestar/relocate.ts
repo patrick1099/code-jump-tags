@@ -265,6 +265,22 @@ export function matchAnchor(
   return { status: "lost", line: centerLine };
 }
 
+// The single choke point that turns a stored tag line into a display/jump line.
+// Original-first double match, then the legacy regex pattern, else the stored
+// line. Marker and jump MUST both call this so they always agree.
+export function resolveTagLine(
+  text: string,
+  line: number,
+  original?: string,
+  current?: string,
+  pattern?: string
+): number {
+  const m = matchAnchor(text, line, original, current);
+  if (m.status !== "lost") return m.line;
+  if (pattern) return resolveLine(text, line, pattern);
+  return line;
+}
+
 // The raw comparison anchor for a line: its trimmed text. undefined for a
 // blank/whitespace-only line (no usable anchor). Counterpart of linePattern,
 // but un-escaped — fed to the fuzzy resolver.
