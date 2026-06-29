@@ -242,11 +242,6 @@
         "category": "Code Jump Tags"
       },
       {
-        "command": "codeJumpTags.recoverToOriginal",
-        "title": "找回原行",
-        "category": "Code Jump Tags"
-      },
-      {
         "command": "codeJumpTags.recheckCurrentFile",
         "title": "重新校验当前文件的标签",
         "category": "Code Jump Tags"
@@ -348,10 +343,6 @@
         },
         {
           "command": "codeJumpTags.promoteToOriginal",
-          "when": "false"
-        },
-        {
-          "command": "codeJumpTags.recoverToOriginal",
           "when": "false"
         }
       ],

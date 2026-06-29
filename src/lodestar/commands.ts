@@ -24,12 +24,11 @@ import {
   toggleNotePosition
 } from "./editThread";
 import { getStore, saveStore } from "./persistence";
-import { resolveTagLine, linePattern, lineAnchorText, findAnchorLine } from "./relocate";
+import { resolveTagLine, linePattern, lineAnchorText } from "./relocate";
 import {
   createFolder,
   findNode,
   findTagByLocation,
-  healTagToLine,
   removeToTrash,
   renameFolderNode,
   restoreSelection,
@@ -543,40 +542,6 @@ export async function promoteToOriginal(tagId: string, line?: number) {
   window.setStatusBarMessage("Code Jump Tags: 已采纳为新身份", 2000);
 }
 
-// 「找回原行」: 拿 original 找回真行, 丢掉被污染的 current, original 不动。
-export async function recoverToOriginal(tagId: string) {
-  const store = getStore();
-  const found = findNode(store, tagId);
-  if (!found || found.node.type !== "tag") {
-    window.showInformationMessage("Code Jump Tags: 找不到该标签");
-    return;
-  }
-  const tag = found.node;
-  const root = workspace.workspaceFolders![0].uri;
-  const doc = await workspace.openTextDocument(Uri.joinPath(root, tag.file));
-  const text = doc.getText();
-  const hit = findAnchorLine(text, tag.line, tag.original);
-  if (hit <= 0) {
-    window.showInformationMessage(
-      "Code Jump Tags: 按原内容找不到真行,请用「移到光标行」手动重指"
-    );
-    return;
-  }
-  const raw = doc.lineAt(hit - 1).text.trim();
-  healTagToLine(
-    store,
-    tagId,
-    hit,
-    raw ? lineAnchorText(raw) : undefined,
-    raw ? linePattern(raw) : undefined
-  );
-  await saveStore();
-  const { recheckFile } = await import("../player/recheck");
-  await recheckFile(tag.file);
-  await gotoLocation(tag.file, hit, tag.pattern);
-  window.setStatusBarMessage("Code Jump Tags: 已按原内容找回", 2000);
-}
-
 // 「重新校验当前文件」: 手动触发, 不受 recheckOn.* 设置影响。
 export async function recheckCurrentFile() {
   const editor = window.activeTextEditor;
@@ -913,7 +878,6 @@ export function registerLodestarCommands(context: ExtensionContext) {
     commands.registerCommand(`${EXTENSION_NAME}.redoMove`, redoMove),
     commands.registerCommand(`${EXTENSION_NAME}.undoTagMove`, undoTagMove),
     commands.registerCommand(`${EXTENSION_NAME}.promoteToOriginal`, promoteToOriginal),
-    commands.registerCommand(`${EXTENSION_NAME}.recoverToOriginal`, recoverToOriginal),
     commands.registerCommand(`${EXTENSION_NAME}.recheckCurrentFile`, recheckCurrentFile)
   );
 }
