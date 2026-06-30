@@ -5,6 +5,7 @@ import {
   getSuspect,
   allSuspects,
   clearSuspects,
+  removeSuspects,
   FileTag
 } from "../../src/lodestar/suspect";
 
@@ -64,5 +65,31 @@ describe("suspect registry", () => {
     const info = { id: "t1", file: "a.ts", status: "lost" as const, line: 5 };
     setFileSuspects("a.ts", [info]);
     expect(setFileSuspects("a.ts", [{ ...info }])).toBe(false);
+  });
+});
+
+describe("removeSuspects", () => {
+  beforeEach(() => clearSuspects());
+
+  it("removes the given ids and reports changed", () => {
+    setFileSuspects("a.ts", [
+      { id: "t1", file: "a.ts", status: "current", line: 2 },
+      { id: "t2", file: "a.ts", status: "lost", line: 5 }
+    ]);
+    expect(removeSuspects(["t1"])).toBe(true);
+    expect(getSuspect("t1")).toBeUndefined();
+    expect(getSuspect("t2")).toBeDefined();
+  });
+
+  it("returns false when none of the ids were present", () => {
+    setFileSuspects("a.ts", [{ id: "t1", file: "a.ts", status: "current", line: 2 }]);
+    expect(removeSuspects(["nope"])).toBe(false);
+    expect(getSuspect("t1")).toBeDefined();
+  });
+
+  it("removing the last suspect empties the registry", () => {
+    setFileSuspects("a.ts", [{ id: "t1", file: "a.ts", status: "current", line: 2 }]);
+    expect(removeSuspects(["t1"])).toBe(true);
+    expect(allSuspects()).toEqual([]);
   });
 });

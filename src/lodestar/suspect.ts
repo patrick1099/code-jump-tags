@@ -61,6 +61,17 @@ export function setFileSuspects(file: string, infos: SuspectInfo[]): boolean {
   return changed;
 }
 
+// Drop suspect entries for the given ids (e.g. tags just deleted from the
+// store). Returns true if any entry was actually removed, so the caller can
+// decide whether to refresh the tree.
+export function removeSuspects(ids: string[]): boolean {
+  let changed = false;
+  for (const id of ids) {
+    if (registry.delete(id)) changed = true;
+  }
+  return changed;
+}
+
 export function getSuspect(id: string): SuspectInfo | undefined {
   return registry.get(id);
 }
