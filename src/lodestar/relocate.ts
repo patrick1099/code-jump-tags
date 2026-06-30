@@ -258,6 +258,28 @@ export function matchAnchor(
   original?: string,
   current?: string
 ): AnchorMatch {
+  // Trust the tracked center FIRST. If the stored line still IS this tag's line
+  // — it matches `original` (healthy) or, after an in-place edit, its refreshed
+  // `current` (diverged from identity = suspect, but not moved) — pin there and
+  // do NOT ring-search. Without this, editing a tagged line so it drops below
+  // the similarity bar makes the original-search latch onto an identical-looking
+  // twin elsewhere, and the marker hops to that line as you type.
+  const lines = text.split(/\r?\n/);
+  const center0 = centerLine - 1;
+  const centerOk = (anchor?: string): boolean =>
+    anchor !== undefined &&
+    center0 >= 0 &&
+    center0 < lines.length &&
+    lines[center0] !== undefined &&
+    similarity(normalizeWs(lines[center0]), normalizeWs(anchor)) >=
+      SIMILARITY_THRESHOLD;
+
+  if (centerOk(original)) return { status: "original", line: centerLine };
+  if (centerOk(current)) return { status: "current", line: centerLine };
+
+  // Center is neither — the line was overwritten or genuinely moved away.
+  // Recover by content: original first (heal silently), then current (soft
+  // candidate), else lost.
   const o = findAnchorLine(text, centerLine, original);
   if (o > 0) return { status: "original", line: o };
   const c = findAnchorLine(text, centerLine, current);

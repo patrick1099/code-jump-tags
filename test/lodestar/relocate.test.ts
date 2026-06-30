@@ -343,6 +343,33 @@ describe("matchAnchor (二重匹配)", () => {
       line: 2
     });
   });
+
+  it("stays on the in-place-edited line, never hops to an identical twin", () => {
+    // 行内编辑:本行(第1行)被改得偏离 original,但仍等于刚刷新的 current;
+    // 文件第4行有一条与 original 一模一样的孪生行。标签必须钉在本行,
+    // 不能因为 original 在别处有同款就跳过去。(RC: decorator 实时重绘的 hop)
+    const text = [
+      "* @param usart_num :串口号 111111111", // 第1行:本标签行,行内编辑后的 current
+      "void a()",
+      "  body",
+      "* @param usart_num :串口号"             // 第4行:与 original 完全相同的孪生行
+    ].join("\n");
+    const original = "* @param usart_num :串口号";
+    const current = "* @param usart_num :串口号 111111111";
+    expect(matchAnchor(text, 1, original, current)).toEqual({
+      status: "current",
+      line: 1
+    });
+  });
+
+  it("still ring-searches when the center matches neither (genuine move)", () => {
+    // 中心行被整体覆盖成无关内容、original 真的搬到了别处时,仍按内容环搜恢复。
+    const text = ["unrelated overwrite", "x", "int computeCrc16(buf)"].join("\n");
+    expect(matchAnchor(text, 1, "int computeCrc16(buf)", "int computeCrc16(buf)")).toEqual({
+      status: "original",
+      line: 3
+    });
+  });
 });
 
 describe("resolveTagLine", () => {
@@ -366,6 +393,18 @@ describe("resolveTagLine", () => {
   it("returns stored line when everything misses", () => {
     const text = ["a", "b", "c"].join("\n");
     expect(resolveTagLine(text, 2, "zzz", "yyy")).toBe(2);
+  });
+
+  it("keeps the marker on the in-place-edited line, not on an identical twin", () => {
+    const text = [
+      "* @param usart_num :串口号 111111111",
+      "void a()",
+      "  body",
+      "* @param usart_num :串口号"
+    ].join("\n");
+    const original = "* @param usart_num :串口号";
+    const current = "* @param usart_num :串口号 111111111";
+    expect(resolveTagLine(text, 1, original, current)).toBe(1);
   });
 });
 
