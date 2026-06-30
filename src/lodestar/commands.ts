@@ -619,6 +619,11 @@ export async function batchDeleteByIds(
 
   if (!(await confirmDelete(summary))) return false;
 
+  // 删除前（节点还在树上）收集所有被删标签 id，含文件夹后代，
+  // 用于删除后从运行时可疑注册表里清掉它们。
+  const { collectTagsUnder } = await import("./selection");
+  const removedTagIds = collectTagsUnder(store, ids).map(t => t.id);
+
   let anyFolder = false;
   for (const id of ids) {
     const f = findNode(store, id);
@@ -632,6 +637,13 @@ export async function batchDeleteByIds(
   }
   if (anyFolder) closeTagEditor();
   await saveStore();
+
+  // 被删标签若在可疑注册表里有残留，清掉并刷新树，避免「待处理」分组残留空壳。
+  const { removeSuspects } = await import("./suspect");
+  if (removeSuspects(removedTagIds)) {
+    const { refreshTagsTree } = await import("../player/tree");
+    refreshTagsTree();
+  }
   return true;
 }
 
