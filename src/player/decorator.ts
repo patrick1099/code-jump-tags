@@ -6,7 +6,7 @@ import { debounce } from "throttle-debounce";
 import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
 import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
-import { findNode, LineEdit } from "../lodestar/tree";
+import { findNode, LineEdit, shiftedLine } from "../lodestar/tree";
 import {
   reanchorTag,
   resolveTagLine,
@@ -251,6 +251,11 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
       const found = findNode(cache0, step.id);
       if (!found || found.node.type !== "tag") continue;
       const node = found.node;
+      // inline tag 的锚由 inlineNotes 的折叠路径独占改写（永远写剥净后的干净代码）。
+      // 展开态的行文本此刻含 marker + 私密 note，若在此从当前行文本刷新锚，会把私密
+      // 内容漏进 node.text/pattern 并被 debouncedSaveStore 落盘（违反「身份锚永不含
+      // marker」）。故 inline tag 完全跳过同行锚刷新。
+      if (node.inline) continue;
       if (!editedLines0.has(node.line - 1)) continue;
       const cur = lines0[node.line - 1];
       if (cur === undefined) continue;
@@ -286,6 +291,17 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
       continue;
     }
     const node = found.node;
+    // inline tag：只跟随行号位移，绝不从当前行文本刷新锚。若此刻它正处于展开态，当前行
+    // 含 marker + 私密 note；reanchorTag 会把该文本当作新锚采纳（漏进 text/pattern 并落
+    // 盘）。锚的文本刷新由 inlineNotes 的折叠路径独占（每次折叠都从剥净代码重锚）。
+    if (node.inline) {
+      const shifted = shiftedLine(node.line - 1, edits) + 1;
+      if (shifted !== node.line) {
+        node.line = shifted;
+        changed++;
+      }
+      continue;
+    }
     // Re-anchor: shift by the edit, let content recovery override a wrong guess
     // (overwrite case), and refresh the anchor pattern from the new line text so
     // the stored anchor never goes stale. Persist BOTH line and pattern.

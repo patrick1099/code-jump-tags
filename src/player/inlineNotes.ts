@@ -148,12 +148,24 @@ export async function collapseLine(
   const anchorText = lineAnchorText(parsed.code);
   const pattern = linePattern(parsed.code);
 
+  // IMPORTANT#2：先剥净 buffer 并检查结果。editor.edit 无法应用时 resolve false（不
+  // throw）。若失败，绝不继续 upsert + saveStore——那会把「buffer 已干净」的假象落盘，
+  // 而 buffer 里的 //me: 私密文本仍在，造成锚与磁盘状态说谎。
+  const stripped = await stripBuffer(editor, line0, parsed.code);
+  if (!stripped) return;
+
   if (existing) {
     // 一行一签：命中已有 tag 就并入其 note，不新建第二条。
-    // 若命中的是正式标签，也只更 note，不强制置 inline（`??=` 只在未设时补真）。
     existing.note = parsed.note;
-    existing.inline ??= true;
-    existing.inlineMarker = parsed.marker;
+    // 折叠是 inline tag 锚的唯一改写点（decorator 不再随同行编辑刷新 inline 锚），
+    // 故每次折叠都从剥净后的干净代码重锚，避免曾被编辑过的底层代码留下旧锚。
+    existing.text = anchorText;
+    existing.pattern = pattern;
+    // 若命中的是正式标签则不强制置 inline（遵 brief 原话「只更 note」）；只有本就是
+    // inline 的 tag 才记 inlineMarker（对正式标签它无意义）。
+    if (existing.inline) {
+      existing.inlineMarker = parsed.marker;
+    }
   } else {
     // 照抄 recorder/commands.ts:430-439 的构造，另加 inline 三件套。
     const tag: TagNode = {
@@ -176,21 +188,22 @@ export async function collapseLine(
     addTag(getStore(), tag, inbox.id);
   }
 
-  await stripBuffer(editor, line0, parsed.code);
   await saveStore();
 }
 
 // 把整行替换为干净代码。要点 6：undoStopBefore/After:false 让这次编辑并入相邻用户
 // 编辑，撤销时不至于突兀（已知残留见文件尾注）。busy 包住 edit 防自触发递归。
+// 返回 editor.edit 的布尔结果：VS Code 无法应用编辑时 resolve false（不 throw），
+// 调用方据此避免在剥净失败时误报成功。
 async function stripBuffer(
   editor: vscode.TextEditor,
   line0: number,
   code: string
-): Promise<void> {
+): Promise<boolean> {
   const range = editor.document.lineAt(line0).range;
   busy = true;
   try {
-    await editor.edit(
+    return await editor.edit(
       b => b.replace(range, code),
       { undoStopBefore: false, undoStopAfter: false }
     );
@@ -226,15 +239,19 @@ export async function expandLine(
   const text = toInlineText(lineText, tag.note, marker);
 
   const range = doc.lineAt(line0).range;
+  let ok = false;
   busy = true;
   try {
-    await editor.edit(
+    // IMPORTANT#2：同样检查 editor.edit 结果。展开不落盘，失败仅意味着注入没发生；
+    // 早退即可，调用方后续的折叠会因该行不含 marker 而自然成为 no-op。
+    ok = await editor.edit(
       b => b.replace(range, text),
       { undoStopBefore: false, undoStopAfter: false }
     );
   } finally {
     busy = false;
   }
+  if (!ok) return;
 }
 
 // ── 要点 4：触发器 onDidChangeTextEditorSelection ────────────────────────────
