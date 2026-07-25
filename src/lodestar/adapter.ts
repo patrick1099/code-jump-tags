@@ -18,12 +18,18 @@ function tagToStep(tag: TagNode): CodeTourStep {
   return step;
 }
 
-export function folderToTour(folder: FolderNode, workspaceId: string): CodeTour {
+export function folderToTour(
+  folder: FolderNode,
+  workspaceId: string,
+  opts: { includeInline?: boolean } = {}
+): CodeTour {
+  const includeInline = opts.includeInline !== false; // 默认含
   return {
     id: `${workspaceId}::${folder.id}`,
     title: folder.title,
     steps: folder.children
       .filter((c): c is TagNode => c.type === "tag")
+      .filter(t => includeInline || !t.inline)
       .map(tagToStep)
   };
 }
@@ -36,7 +42,7 @@ export function folderToTour(folder: FolderNode, workspaceId: string): CodeTour 
 // getChildren, and their tags are decorated via treeToAllTours below.
 export function treeToTours(store: LodestarStore, workspaceId: string): CodeTour[] {
   const folders = store.tree.filter((n): n is FolderNode => n.type === "folder");
-  return folders.map(f => folderToTour(f, workspaceId));
+  return folders.map(f => folderToTour(f, workspaceId, { includeInline: false }));
 }
 
 // Every folder at ANY depth becomes its own tour (holding that folder's direct

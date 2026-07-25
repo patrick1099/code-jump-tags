@@ -149,3 +149,32 @@ describe("suspectTour", () => {
     expect(suspectTour(store, "ws", []).steps).toEqual([]);
   });
 });
+
+describe("inline note 树可见性", () => {
+  const s = {
+    version: 1 as const,
+    tree: [
+      {
+        type: "folder" as const, id: "f1", title: "组", children: [
+          { type: "tag" as const, id: "normal", note: "正式", file: "a.c", line: 1, createdAt: "x" },
+          { type: "tag" as const, id: "inl", note: "随手", file: "a.c", line: 2, inline: true, notePosition: "end" as const, createdAt: "x" }
+        ]
+      }
+    ]
+  };
+
+  it("treeToTours 隐藏 inline（树里只剩正式标签）", () => {
+    const tours = treeToTours(s, "ws");
+    expect(tours[0].steps.map(st => st.id)).toEqual(["normal"]);
+  });
+
+  it("treeToAllTours 保留 inline（装饰源含随手）", () => {
+    const tours = treeToAllTours(s, "ws");
+    const ids = tours.flatMap(t => t.steps.map(st => st.id));
+    expect(ids).toContain("inl");
+  });
+
+  it("folderToTour 默认含 inline（不破坏既有调用者）", () => {
+    expect(folderToTour(s.tree[0], "ws").steps.map(st => st.id)).toEqual(["normal", "inl"]);
+  });
+});

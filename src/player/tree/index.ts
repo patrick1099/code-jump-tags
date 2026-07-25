@@ -218,7 +218,11 @@ class CodeTourTreeProvider
     return found.node.children
       .filter((c): c is typeof c & { type: "folder" } => c.type === "folder")
       .map(
-        child => new CodeTourNode(folderToTour(child, wsId), this.extensionPath)
+        child =>
+          new CodeTourNode(
+            folderToTour(child, wsId, { includeInline: false }),
+            this.extensionPath
+          )
       );
   }
 
@@ -239,7 +243,7 @@ class CodeTourTreeProvider
         const found = findNode(getStore(), folderId);
         if (found && found.parent) {
           return new CodeTourNode(
-            folderToTour(found.parent, getWorkspaceId()),
+            folderToTour(found.parent, getWorkspaceId(), { includeInline: false }),
             this.extensionPath
           );
         }
