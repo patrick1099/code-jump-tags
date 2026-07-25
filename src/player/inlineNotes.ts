@@ -10,6 +10,7 @@
 // （`parsed.code`），marker 只落在 `inlineMarker`（仅供回展）。
 
 import * as vscode from "vscode";
+import { EXTENSION_NAME } from "../constants";
 import { getStore, saveStore } from "../lodestar/persistence";
 import {
   addTag,
@@ -19,6 +20,7 @@ import {
 } from "../lodestar/tree";
 import { lineAnchorText, linePattern } from "../lodestar/relocate";
 import {
+  findMarker,
   fullMarkers,
   parseInlineNote,
   toInlineText
@@ -310,20 +312,69 @@ async function onSelectionChange(
   }
 }
 
+// ── 要点 7：扫残留兜底 ────────────────────────────────────────────────────────
+//
+// 堵「光标停在展开行时被 autosave/提交」的漏：selection 触发器只在光标离开一行时
+// 折叠它，若那次离开被跳过（例如切换到别的编辑器/文件，没经过同文档内的 selection
+// 事件），marker 文本连同私密 note 就可能原样留在 buffer 里被存盘/提交。这里在编辑
+// 器变为 active 时，把整份文档过一遍：任何命中 marker 的行都折叠掉，兜住上述漏洞。
+//
+// 从后往前遍历：折叠只改写本行、不删行，理论上正反向都安全，但从后往前对未来若扩展
+// 出「跨行」的折叠更稳（不会因为前面行数变化打乱后面行号）。跳过光标当前行——那行
+// 可能是用户正在敲的 note，被吞掉会打断输入（同 onSelectionChange 的「待折叠」语义）。
+export async function rescanDocument(editor: vscode.TextEditor): Promise<void> {
+  if (busy) return; // 有折叠/展开 edit 正在进行，避免重入
+  if (!isEligible(editor)) return;
+  if (!inlineConfig().enabled) return;
+
+  const doc = editor.document;
+  const markers = markersForDocument(doc);
+  const cursorLine = editor.selection.active.line;
+
+  for (let line0 = doc.lineCount - 1; line0 >= 0; line0--) {
+    if (line0 === cursorLine) continue; // 光标所在行可能正在被编辑，留给 selection 触发器
+    const lineText = doc.lineAt(line0).text;
+    if (findMarker(lineText, markers) === null) continue; // 无 marker，无事可做
+    await collapseLine(editor, line0);
+  }
+}
+
 // ── 注册 ─────────────────────────────────────────────────────────────────────
 //
 // 与 decorator.ts 的做法一致：直接挂 vscode 监听器，不 push 到 context.subscriptions
-// （随扩展生命周期存活）。
+// （随扩展生命周期存活）。命令注册同样不进 subscriptions，照抄 commands.ts 的做法。
 export function registerInlineNotes(): void {
   vscode.window.onDidChangeTextEditorSelection(e => {
     // fire-and-forget：selection 回调不能 await，内部自带 busy 防抖。
     void onSelectionChange(e);
   });
 
+  // 编辑器变为 active（含切换回一个早已打开的文件）→ 扫一遍残留 marker。
+  // fire-and-forget：事件回调不能 await，rescanDocument 内部自带 busy 防抖。
+  vscode.window.onDidChangeActiveTextEditor(editor => {
+    if (editor) {
+      void rescanDocument(editor);
+    }
+  });
+
+  // 手动兜底：给关掉了自动折叠触发点（或想立即清一遍当前文件）的人一个命令面板入口。
+  vscode.commands.registerCommand(`${EXTENSION_NAME}.rescanInlineNotes`, () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      void rescanDocument(editor);
+    }
+  });
+
   // 编辑器关闭时清掉它的展开状态，避免 Map 无限增长。
   vscode.workspace.onDidCloseTextDocument(doc => {
     expandedLines.delete(doc.uri.toString());
   });
+
+  // 启动时已经打开的编辑器也要扫一遍（同 decorator.ts registerDecorators 的
+  // "Initial paint for the editor already open on startup" 做法）。
+  if (vscode.window.activeTextEditor) {
+    void rescanDocument(vscode.window.activeTextEditor);
+  }
 }
 
 // ── 要点 6：undo 交织（显式验收项，非自动化测试）───────────────────────────────
