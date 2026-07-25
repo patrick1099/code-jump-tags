@@ -329,10 +329,12 @@ export async function rescanDocument(editor: vscode.TextEditor): Promise<void> {
 
   const doc = editor.document;
   const markers = markersForDocument(doc);
-  const cursorLine = editor.selection.active.line;
 
   for (let line0 = doc.lineCount - 1; line0 >= 0; line0--) {
-    if (line0 === cursorLine) continue; // 光标所在行可能正在被编辑，留给 selection 触发器
+    // 光标行每次迭代都现读，不在循环外缓存：collapseLine 内部会 await（editor.edit
+    // IPC + saveStore 落盘），光标在此期间可能被用户移到别处；缓存的旧值会让"正在
+    // 敲的行"在后续迭代里被误判成非光标行而遭吞掉，正是要避免的那种漏。
+    if (line0 === editor.selection?.active.line) continue; // 光标所在行可能正在被编辑，留给 selection 触发器
     const lineText = doc.lineAt(line0).text;
     if (findMarker(lineText, markers) === null) continue; // 无 marker，无事可做
     await collapseLine(editor, line0);
