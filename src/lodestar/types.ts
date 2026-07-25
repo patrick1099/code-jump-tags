@@ -12,6 +12,8 @@ export interface TagNode {
   ref?: string | null; // reserved: pin to a commit/branch later
   createdAt: string;   // ISO timestamp
   notePosition?: "above" | "end"; // per-tag note placement; unset => "above"
+  inline?: boolean;      // true = 一条 inline note：默认不进主树，光标进入展开成文本
+  inlineMarker?: string; // 该 inline note 折叠时命中的完整 marker（如 "//me:"），仅回展用
 }
 
 export interface FolderNode {
