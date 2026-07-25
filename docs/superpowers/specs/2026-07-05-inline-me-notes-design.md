@@ -1,8 +1,13 @@
 # Code Jump Tags 设计定稿：inline `//me:` 私有注释
 
-> 状态：**定稿，待写实现计划**。
-> 日期：2026-07-05 ｜ 版本目标：待定（下一个 feature 版）｜ 依赖：0.7.x 的锚点引擎（`relocate.ts`）、可疑态引擎（`suspect.ts`）、装饰层（`decorator.ts`）、树（`player/tree`）。
-> 范围切分：**v1 只做「行尾 `//me:`」**（本稿主体）；**v2「上方注释」只留方向、边界隔离、方便回退**（末章）。
+> 状态：**定稿，实现计划已写（`plans/2026-07-26-inline-me-notes-v1.md`），目标版本 0.8.0**。
+> 日期：2026-07-05（2026-07-26 更新范围）｜ 依赖：0.7.x 的锚点引擎（`relocate.ts`）、可疑态引擎（`suspect.ts`）、装饰层（`decorator.ts`）、树（`player/tree`）。
+> 范围切分：**v1 只做「行尾 marker」**（本稿主体）；**v2「上方注释」已弃**（末章存档，不实现）。
+>
+> **2026-07-26 范围决定（git filter 实验结论 + 用户拍板）：**
+> 1. **建 v1，正式作为 0.8.0。** git filter 方案弃用——它逼出「debug 分支带注释 / main 分支不带」这种 per-branch 特殊处理，太费劲；纯插件方案天然免疫（注释根本不落源码，任何分支 commit 都干净）。
+> 2. **marker 可自定义、支持多种并存。** 不再固定「词 + 冒号」，改为一个 **token 列表**（每个 token 自带标点），如 `["me:", "?"]` → 触发 `//me:` 与 `//?`。见「注释前缀」节。
+> 3. **v2（上方注释）弃掉。** 上方那套「三选二」死结不好设计，砍掉；末章仅存档避免重开讨论。
 
 ## 为什么要这套（动机）
 
@@ -31,9 +36,10 @@
 
 ## 数据模型（`src/lodestar/types.ts`）
 
-`TagNode` **新增一个可选字段**（加性，旧数据无需回填即安全）：
+`TagNode` **新增两个可选字段**（加性，旧数据无需回填即安全）：
 
-- **`inline?: boolean`**：`true` = 这是一条 inline note（默认不进主树、光标进入展开成 `//me:` 文本）。缺省 / `false` = 正式标签，行为同今天。
+- **`inline?: boolean`**：`true` = 这是一条 inline note（默认不进主树、光标进入展开成文本）。缺省 / `false` = 正式标签，行为同今天。
+- **`inlineMarker?: string`**：折叠时记下这条 note 当初用的**完整 marker**（如 `"//me:"` 或 `"//?"`），光标回来展开就还原成用户敲的那种;缺省则退回该文件「首个配置 marker」。仅 inline note 用。
 
 其余字段（`note` / `file` / `line` / `original` / `current`(=`text`) / `pattern` / `notePosition`）**全部沿用不改**。inline note 的 `notePosition` 恒为 `end`（v1 只做行尾）。
 
@@ -68,19 +74,25 @@
 - **行内已有真注释**：`foo(); // real //me: 私记` —— 只认**最后一个** marker 段为 note，`// real` 留在锚文字里。（取「最后一个 marker」而非第一个，避免把真注释里的字当 note。）
 - **一行一签**：`//me:` 落在已有标签的行 → 归并进那条标签的 note，不产生第二签；class 维持原样。
 
-## 注释前缀（跨语言）
+## 注释前缀（跨语言、可自定义、多 marker 并存）
 
-marker = 当前语言的**行注释符** + 可配置**标记词**，拼成 `<line-comment><word>:`。
+一个**完整 marker** = 当前语言的**行注释符** + 一个可配置 **token**（token 自带标点）。用户配一个 token 列表，每个都触发；跨语言自动换行注释符。
 
-| 语言 | 行注释符 | marker（默认 word=`me`）|
-|---|---|---|
-| JS/TS/C/C++/Java/Go/Rust | `//` | `//me:` |
-| Python/Shell/YAML | `#` | `#me:` |
-| Lua/SQL | `--` | `--me:` |
-
-- 行注释符从 VS Code 语言配置取（`vscode.languages` / 语言的 `comments.lineComment`），取不到则退回 `//`。
-- 设置项 **`codeJumpTags.inlineNote.marker`**（默认 `"me"`）。改词即改触发前缀。
+- 设置项 **`codeJumpTags.inlineNote.markers`**：`string[]`，默认 `["me:"]`。每项是「跟在行注释符后面的那截」，**自带标点**（所以能表达无冒号的 `?`）。
 - 设置项 **`codeJumpTags.inlineNote.enabled`**（默认 `true`）：整特性总开关。
+
+例：配 `["me:", "?"]`：
+
+| 语言 | 行注释符 | 完整 markers |
+|---|---|---|
+| JS/TS/C/C++/Java/Go/Rust | `//` | `//me:`、`//?` |
+| Python/Shell/YAML | `#` | `#me:`、`#?` |
+| Lua/SQL | `--` | `--me:`、`--?` |
+
+- 行注释符从 VS Code 语言配置取（语言 `comments.lineComment`），取不到退回 `//`。
+- **解析规则**：一行里从右往左找**任意一个完整 marker**的最后一次出现;前面（trimEnd）是干净代码（锚文字），后面（trim）是 note。多 marker 并存靠「取所有 marker 里最靠右的那次匹配」统一处理。
+- **回展保真**：折叠记下命中的完整 marker 进 `inlineMarker`，展开就用它（`//?` 不会被展成 `//me:`）;缺省退回列表首个。
+- **纯/胶水分层**：纯函数只吃「完整 marker 列表」（语言无关，好测）；把 token 拼上行注释符得到完整 marker 是胶水层（读 vscode 语言配置）的活。
 
 ## 锚点与可疑态：直接复用，不新增引擎
 
@@ -106,10 +118,10 @@ marker = 当前语言的**行注释符** + 可配置**标记词**，拼成 `<lin
 
 无 vscode 依赖的纯函数先写 vitest，再接胶水层（沿用 `lodestar/` 既有约定）：
 
-- `parseInlineNote(lineText, marker)` → `{ code, note } | null`：取最后一个 marker 段，前为 code、后为 note。
-- `stripInlineNote(lineText, marker)` → 干净代码（用于锚比较）。
-- `toInlineText(code, note, marker)` → 展开后的行文字。
-- **往返幂等**：`parse(toInlineText(code, note)) == {code, note}`；`stripInlineNote(toInlineText(...)) == code`。
+- `parseInlineNote(lineText, markers)` → `{ code, note, marker } | null`：取所有 marker 里最靠右的那次匹配，前为 code、后为 note、`marker` 为命中的那个完整 marker。
+- `stripInlineNote(lineText, markers)` → 干净代码（用于锚比较）。
+- `toInlineText(code, note, marker)` → 展开后的行文字（`code` + 分隔 + `marker` + ` ` + `note`）。
+- **往返幂等**（对已 trim 的 code/note、m ∈ markers）：`parseInlineNote(toInlineText(code, note, m), markers) == {code, note, marker: m}`；`stripInlineNote(toInlineText(code, note, m), markers) == code`。
 - **边界**：行内已有真注释只认最后一段；空 note；marker 出现在字符串字面量里（v1 接受「宁可多认」的已知局限，见下）。
 - **锚不含 marker**：折叠写入的 `original` 等于干净代码，不含 marker。
 - **一行一签归并**：`//me:` 落已有标签行 → 归并不新建。
@@ -125,9 +137,9 @@ marker = 当前语言的**行注释符** + 可配置**标记词**，拼成 `<lin
 
 ---
 
-# v2 方向（只存档、不在 v1 实现、边界隔离方便回退）
+# v2 方向（已弃 —— 仅存档，不实现）
 
-> **v2 = 上方（独占一行）注释。** 本章记录已达成的设计结论与被否决的路，避免将来重开同样的讨论。实现时应把 v2 隔离在独立开关/模块后，**移除 v2 不得触碰 v1 行尾逻辑**。
+> **2026-07-26 决定：v2（上方独占一行注释）弃掉。** 上方那套「三选二」死结不好设计，性价比不足。本章仅作存档，记录已达成的设计结论与被否决的路，避免将来有人重开同样的讨论。**v1 到此为止，不做上方注释。**
 
 ## v2 定案：上方注释锚在下方真代码行，用 CodeLens 渲染
 
