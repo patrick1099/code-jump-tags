@@ -149,6 +149,24 @@ export function retargetTag(
   return true;
 }
 
+// 翻转一条 tag 的 inline 标志（提权=false / 降格=true）。降格进随手、提权成正式标签。
+// 返回是否命中一个 tag（未知 id / 文件夹返回 false）。
+export function setInline(
+  store: LodestarStore,
+  id: string,
+  inline: boolean
+): boolean {
+  const found = findNode(store, id);
+  if (!found || found.node.type !== "tag") return false;
+  if (inline) {
+    found.node.inline = true;
+  } else {
+    delete found.node.inline;
+    delete found.node.inlineMarker;
+  }
+  return true;
+}
+
 function childrenOf(store: LodestarStore, parentId?: string): TreeNode[] {
   if (!parentId) return store.tree;
   const found = findNode(store, parentId);
