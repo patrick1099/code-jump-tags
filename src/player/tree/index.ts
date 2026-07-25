@@ -12,7 +12,8 @@ import {
   TreeDataProvider,
   TreeDragAndDropController,
   TreeItem,
-  window
+  window,
+  workspace
 } from "vscode";
 import { AMBIENT_TOUR_ID, EXTENSION_NAME } from "../../constants";
 import { generatePreviewContent } from "..";
@@ -43,7 +44,7 @@ class CodeTourTreeProvider
         if (s instanceof CodeTourStepNode) return s.step?.id;
         if (s instanceof CodeTourNode) {
           const folderId = s.tour.id.split("::").pop();
-          if (folderId === "__suspect__") return undefined; // 合成分组不可拖
+          if (folderId === "__suspect__" || folderId === "__inline__") return undefined; // 合成分组不可拖
           return folderId || undefined;
         }
         return undefined;
@@ -162,6 +163,20 @@ class CodeTourTreeProvider
               this.extensionPath
             )
           );
+        }
+
+        const showInlineGroup = workspace
+          .getConfiguration(EXTENSION_NAME)
+          .get<boolean>("inlineNote.showSummaryGroup", true);
+        if (showInlineGroup) {
+          const { getStore, getWorkspaceId } = await import(
+            "../../lodestar/persistence"
+          );
+          const { inlineTour } = await import("../../lodestar/adapter");
+          const tour = inlineTour(getStore(), getWorkspaceId());
+          if (tour.steps.length > 0) {
+            tours.unshift(new CodeTourNode(tour, this.extensionPath));
+          }
         }
 
         return tours;

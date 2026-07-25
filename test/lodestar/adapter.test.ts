@@ -6,7 +6,9 @@ import {
   LOOSE_TITLE,
   folderToTour,
   suspectTour,
-  SUSPECT_TOUR_ID
+  SUSPECT_TOUR_ID,
+  inlineTour,
+  INLINE_TOUR_ID
 } from "../../src/lodestar/adapter";
 import { LodestarStore, FolderNode } from "../../src/lodestar/types";
 import { createEmptyStore } from "../../src/lodestar/tree";
@@ -176,5 +178,39 @@ describe("inline note 树可见性", () => {
 
   it("folderToTour 默认含 inline（不破坏既有调用者）", () => {
     expect(folderToTour(s.tree[0], "ws").steps.map(st => st.id)).toEqual(["normal", "inl"]);
+  });
+});
+
+describe("inlineTour", () => {
+  const s = {
+    version: 1 as const,
+    tree: [
+      { type: "tag" as const, id: "root_inl", note: "根随手", file: "a.c", line: 1, inline: true, createdAt: "x" },
+      {
+        type: "folder" as const, id: "f1", title: "组", children: [
+          { type: "tag" as const, id: "normal", note: "正式", file: "b.c", line: 1, createdAt: "x" },
+          { type: "tag" as const, id: "inl", note: "随手", file: "b.c", line: 2, inline: true, notePosition: "end" as const, createdAt: "x" },
+          {
+            type: "folder" as const, id: "f2", title: "子组", children: [
+              { type: "tag" as const, id: "nested_inl", note: "嵌套随手", file: "c.c", line: 3, inline: true, createdAt: "x" }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  it("collects every inline tag across the whole tree, with a counted title", () => {
+    const tour = inlineTour(s, "ws");
+    expect(tour.id).toBe(`ws::${INLINE_TOUR_ID}`);
+    expect(tour.title).toBe("💬 随手 (3)");
+    expect(tour.steps.map(st => st.id)).toEqual(["root_inl", "inl", "nested_inl"]);
+  });
+
+  it("empty when there are no inline tags", () => {
+    const noInline = { version: 1 as const, tree: [{ type: "tag" as const, id: "t1", note: "正式", file: "a.c", line: 1, createdAt: "x" }] };
+    const tour = inlineTour(noInline, "ws");
+    expect(tour.title).toBe("💬 随手 (0)");
+    expect(tour.steps).toEqual([]);
   });
 });

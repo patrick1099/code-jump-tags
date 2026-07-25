@@ -14,9 +14,11 @@ import { EXTENSION_NAME } from "../constants";
 import { getStore, saveStore } from "../lodestar/persistence";
 import {
   addTag,
+  findNode,
   findTagByLocation,
   getOrCreateInbox,
-  newFolderId
+  newFolderId,
+  setInline
 } from "../lodestar/tree";
 import { lineAnchorText, linePattern } from "../lodestar/relocate";
 import {
@@ -341,6 +343,44 @@ export async function rescanDocument(editor: vscode.TextEditor): Promise<void> {
   }
 }
 
+// ── 提权 / 降格命令 ───────────────────────────────────────────────────────────
+//
+// 与仓库其它树右键命令（见 lodestar/commands.ts 的 tagIdOf）同一套参数约定：命令
+// 参数要么是裸 tagId 字符串，要么是带 `.tagLink.id` / `.tagId` 的树节点对象。
+function tagIdOf(arg: string | any): string | undefined {
+  if (typeof arg === "string") return arg;
+  return arg?.tagLink?.id ?? arg?.tagId;
+}
+
+// 「提权为标签」：随手 note → 正式标签（setInline 清 inline/inlineMarker）。
+// package.json 里这条命令的右键菜单挂在所有 `codeJumpTags.tag` 行上 —— 现有 when
+// 词汇没法单独圈出「随手 note 行」（随手 note 只出现在 __inline__ 合成分组里，树
+// 节点本身不带这个信息），因此命令内部按 inline 判空自行兜底：对本就是正式标签的
+// 目标直接 no-op，不当噪音提示。
+export async function promoteInlineNote(arg: string | any): Promise<void> {
+  const tagId = tagIdOf(arg);
+  if (!tagId) return;
+  const store = getStore();
+  const found = findNode(store, tagId);
+  if (!found || found.node.type !== "tag" || !found.node.inline) return;
+  setInline(store, tagId, false);
+  await saveStore();
+}
+
+// 「降格为随手」：正式标签 → 随手 note（setInline 打 inline 标志），note 位置固定
+// 挪到行尾（`notePosition = "end"`），呼应折叠时的落位约定。同 promoteInlineNote，
+// 命令内部对已是随手 note 的目标 no-op。
+export async function demoteToInlineNote(arg: string | any): Promise<void> {
+  const tagId = tagIdOf(arg);
+  if (!tagId) return;
+  const store = getStore();
+  const found = findNode(store, tagId);
+  if (!found || found.node.type !== "tag" || found.node.inline) return;
+  setInline(store, tagId, true);
+  found.node.notePosition = "end";
+  await saveStore();
+}
+
 // ── 注册 ─────────────────────────────────────────────────────────────────────
 //
 // 与 decorator.ts 的做法一致：直接挂 vscode 监听器，不 push 到 context.subscriptions
@@ -366,6 +406,17 @@ export function registerInlineNotes(): void {
       void rescanDocument(editor);
     }
   });
+
+  // 树右键：提权/降格。均 fire-and-forget（命令回调不强制 await 亦可，但这里
+  // 保持一致简单地不 await——两条命令内部自成一体，无需调用方等待）。
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.promoteInlineNote`,
+    (arg: any) => void promoteInlineNote(arg)
+  );
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.demoteToInlineNote`,
+    (arg: any) => void demoteToInlineNote(arg)
+  );
 
   // 编辑器关闭时清掉它的展开状态，避免 Map 无限增长。
   vscode.workspace.onDidCloseTextDocument(doc => {

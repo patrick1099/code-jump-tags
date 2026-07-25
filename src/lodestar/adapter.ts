@@ -97,3 +97,28 @@ export function suspectTour(
     steps: tags.map(tagToStep)
   };
 }
+
+export const INLINE_TOUR_ID = "__inline__";
+
+// Read-only "随手" summary view: a synthetic tour gathering every inline tag
+// (node.inline === true) found anywhere in the tree, in tree order. Tags still
+// live wherever they were created (inbox or otherwise); this only mirrors them
+// for one-shot triage/promotion.
+export function inlineTour(store: LodestarStore, workspaceId: string): CodeTour {
+  const tags: TagNode[] = [];
+  const walk = (nodes: (FolderNode | TagNode)[]): void => {
+    for (const node of nodes) {
+      if (node.type === "tag") {
+        if (node.inline === true) tags.push(node);
+      } else {
+        walk(node.children as (FolderNode | TagNode)[]);
+      }
+    }
+  };
+  walk(store.tree as (FolderNode | TagNode)[]);
+  return {
+    id: `${workspaceId}::${INLINE_TOUR_ID}`,
+    title: `💬 随手 (${tags.length})`,
+    steps: tags.map(tagToStep)
+  };
+}
