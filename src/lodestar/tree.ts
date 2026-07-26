@@ -100,8 +100,10 @@ export function findNode(store: LodestarStore, id: string): FoundNode | undefine
 }
 
 // Find the first tag anchored at a given file + (stored) line, anywhere in the
-// tree. Used to keep one tag per line: adding on an already-tagged line edits
-// the existing tag instead of stacking a duplicate.
+// tree. Multiple formal tags can now share a line; gotoLocation uses this to
+// resolve that line's (possibly relocated) display position, and taking the
+// first match is fine since every tag on the same stored line resolves the
+// same way.
 export function findTagByLocation(
   store: LodestarStore,
   file: string,
