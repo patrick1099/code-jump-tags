@@ -177,6 +177,29 @@ describe("findTagByLocation", () => {
   });
 });
 
+import { findInlineTagByLocation } from "../../src/lodestar/tree";
+
+describe("findInlineTagByLocation", () => {
+  it("returns the INLINE tag when a formal tag and an inline tag share a line", () => {
+    const s = createEmptyStore();
+    addTag(s, { ...tag("formal"), file: "x.c", line: 10 });
+    addTag(s, { ...tag("inline"), file: "x.c", line: 10, inline: true });
+    expect(findInlineTagByLocation(s, "x.c", 10)!.id).toBe("inline");
+  });
+
+  it("returns undefined when the line only has a formal tag", () => {
+    const s = createEmptyStore();
+    addTag(s, { ...tag("formal"), file: "x.c", line: 10 });
+    expect(findInlineTagByLocation(s, "x.c", 10)).toBeUndefined();
+  });
+
+  it("returns undefined for an unknown line", () => {
+    const s = createEmptyStore();
+    addTag(s, { ...tag("inline"), file: "x.c", line: 10, inline: true });
+    expect(findInlineTagByLocation(s, "x.c", 99)).toBeUndefined();
+  });
+});
+
 describe("reorder via moveNode (up/down semantics)", () => {
   it("moves a middle node up", () => {
     const s = createEmptyStore();

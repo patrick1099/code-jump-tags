@@ -122,6 +122,36 @@ export function findTagByLocation(
   return search(store.tree);
 }
 
+// Same walk as findTagByLocation, but scoped to INLINE tags only (node.inline
+// === true). Used by the inline-note collapse/expand glue to target "the
+// inline note on this line" specifically, so it never collides with a formal
+// (non-inline) tag anchored on the same line — the two must be able to
+// coexist without one clobbering the other's note.
+export function findInlineTagByLocation(
+  store: LodestarStore,
+  file: string,
+  line: number
+): TagNode | undefined {
+  function search(siblings: TreeNode[]): TagNode | undefined {
+    for (const node of siblings) {
+      if (
+        node.type === "tag" &&
+        node.file === file &&
+        node.line === line &&
+        node.inline === true
+      ) {
+        return node;
+      }
+      if (node.type === "folder") {
+        const hit = search(node.children);
+        if (hit) return hit;
+      }
+    }
+    return undefined;
+  }
+  return search(store.tree);
+}
+
 // Re-anchor an existing tag to (file, line), replacing its content anchor.
 // anchorText/anchorPattern are precomputed by the caller from the target line's
 // text (same source as addTag: lineAnchorText/linePattern, both trim). A blank

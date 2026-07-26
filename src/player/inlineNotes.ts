@@ -14,8 +14,8 @@ import { EXTENSION_NAME } from "../constants";
 import { getStore, saveStore } from "../lodestar/persistence";
 import {
   addTag,
+  findInlineTagByLocation,
   findNode,
-  findTagByLocation,
   getOrCreateInbox,
   newFolderId,
   setInline
@@ -140,9 +140,12 @@ export async function collapseLine(
   if (file === undefined) return;
   const line1 = line0 + 1;
 
-  const existing = findTagByLocation(getStore(), file, line1);
+  // 只找 INLINE tag：同一行若已有正式标签，绝不把它当「existing」误覆盖——
+  // 正式标签与随手 note 必须能在同一行共存，互不覆盖对方的 note。
+  const existing = findInlineTagByLocation(getStore(), file, line1);
 
-  // 用户把 note 删空、且该行原本没有 tag → 视为「不要这条 note」，仅剥净 buffer、不建 tag。
+  // 用户把 note 删空、且该行没有 inline tag（可能压根没 tag，也可能只有一个
+  // 正式标签）→ 视为「不要这条 note」，仅剥净 buffer、不建 tag、不碰正式标签。
   if (parsed.note.length === 0 && !existing) {
     await stripBuffer(editor, line0, parsed.code);
     return;
@@ -159,18 +162,18 @@ export async function collapseLine(
   if (!stripped) return;
 
   if (existing) {
-    // 一行一签：命中已有 tag 就并入其 note，不新建第二条。
+    // 命中的是这一行已有的 INLINE tag（findInlineTagByLocation 保证，绝不会是
+    // 该行上可能并存的正式标签）→ 并入其 note，不新建第二条，也绝不去动同一行
+    // 若有的正式标签。
     existing.note = parsed.note;
     // 折叠是 inline tag 锚的唯一改写点（decorator 不再随同行编辑刷新 inline 锚），
     // 故每次折叠都从剥净后的干净代码重锚，避免曾被编辑过的底层代码留下旧锚。
     existing.text = anchorText;
     existing.pattern = pattern;
-    // 若命中的是正式标签则不强制置 inline（遵 brief 原话「只更 note」）；只有本就是
-    // inline 的 tag 才记 inlineMarker（对正式标签它无意义）。
-    if (existing.inline) {
-      existing.inlineMarker = parsed.marker;
-    }
+    existing.inlineMarker = parsed.marker;
   } else {
+    // 该行没有 inline tag——可能压根没 tag，也可能只有一个正式标签（此时新建一条
+    // 独立的 inline tag 与它并存在同一行，绝不合并进正式标签、不碰它的 note）。
     // 照抄 recorder/commands.ts:430-439 的构造，另加 inline 三件套。
     const tag: TagNode = {
       type: "tag",
@@ -230,8 +233,8 @@ export async function expandLine(
   const file = relFileFor(editor);
   if (file === undefined) return;
 
-  const tag = findTagByLocation(getStore(), file, line0 + 1);
-  if (!tag || tag.inline !== true) return;
+  const tag = findInlineTagByLocation(getStore(), file, line0 + 1);
+  if (!tag) return;
 
   const lineText = doc.lineAt(line0).text;
   const markers = markersForDocument(doc);
@@ -305,8 +308,8 @@ async function onSelectionChange(
     expandedLines.set(key, null);
     return;
   }
-  const tag = findTagByLocation(getStore(), file, cur0 + 1);
-  if (tag && tag.inline === true) {
+  const tag = findInlineTagByLocation(getStore(), file, cur0 + 1);
+  if (tag) {
     await expandLine(editor, cur0);
     expandedLines.set(key, cur0);
   } else {
