@@ -38,6 +38,7 @@ export interface CodeTourStep {
   original?: string; // Code Jump Tags: immutable identity anchor (machine read-only judge)
   markerTitle?: string;
   notePosition?: "above" | "end"; // Code Jump Tags: per-tag note placement
+  createdAt?: string; // Code Jump Tags: tag 创建时间,同行多签按此稳定排序
 }
 
 export interface CodeTour {

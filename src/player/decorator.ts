@@ -16,6 +16,7 @@ import {
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getSuspect } from "../lodestar/suspect";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
+import { lineLensTitles } from "./lensTitles";
 
 const DISABLED_SCHEMES = [FS_SCHEME_CONTENT, "comment"];
 
@@ -351,22 +352,45 @@ class TagCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     const steps = await getTourSteps(document);
-    return steps
-      .filter(
-        ([, step, , line]) =>
-          line !== undefined &&
-          line !== null &&
-          stepNotePosition(step) === "above"
-      )
-      .map(([, step, , line]) => {
-        const note = (step.description || "").split(/\r?\n/)[0].trim();
-        // Clicking the lens re-edits the tag's note (CodeTour-like).
-        return new vscode.CodeLens(new vscode.Range(line!, 0, line!, 0), {
-          title: note ? `⌖ ${note}` : "⌖",
-          command: step.id ? "codeJumpTags.editNote" : "",
-          arguments: step.id ? [step.id] : undefined
-        });
+    // 只取「行上方」样式、有解析出显示行的 step。
+    const above = steps.filter(
+      ([, step, , line]) =>
+        line !== undefined && line !== null && stepNotePosition(step) === "above"
+    );
+
+    // 按显示行分组:同一行多条标签渲染成 `⌖ A | ⌖ B`,每条 lens 各自可点、
+    // 各编辑各的 tag。
+    const byLine = new Map<number, CodeTourStepTuple[]>();
+    for (const t of above) {
+      const line = t[3]!;
+      const group = byLine.get(line);
+      if (group) group.push(t);
+      else byLine.set(line, [t]);
+    }
+
+    const lenses: vscode.CodeLens[] = [];
+    for (const [line, group] of byLine) {
+      // createdAt 升序、id 兜底 → 稳定的 | 左右序。
+      group.sort((a, b) => {
+        const ca = a[1].createdAt ?? "";
+        const cb = b[1].createdAt ?? "";
+        if (ca !== cb) return ca < cb ? -1 : 1;
+        return (a[1].id ?? "") < (b[1].id ?? "") ? -1 : 1;
       });
+      const titles = lineLensTitles(
+        group.map(([, step]) => (step.description || "").split(/\r?\n/)[0].trim())
+      );
+      group.forEach(([, step], i) => {
+        lenses.push(
+          new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
+            title: titles[i],
+            command: step.id ? "codeJumpTags.editNote" : "",
+            arguments: step.id ? [step.id] : undefined
+          })
+        );
+      });
+    }
+    return lenses;
   }
 }
 

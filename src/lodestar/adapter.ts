@@ -15,6 +15,7 @@ function tagToStep(tag: TagNode): CodeTourStep {
   if (tag.text) step.text = tag.text;
   if (tag.original) step.original = tag.original;
   if (tag.notePosition) step.notePosition = tag.notePosition;
+  if (tag.createdAt) step.createdAt = tag.createdAt;
   return step;
 }
 
