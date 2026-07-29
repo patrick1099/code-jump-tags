@@ -15,15 +15,22 @@ function tagToStep(tag: TagNode): CodeTourStep {
   if (tag.text) step.text = tag.text;
   if (tag.original) step.original = tag.original;
   if (tag.notePosition) step.notePosition = tag.notePosition;
+  if (tag.createdAt) step.createdAt = tag.createdAt;
   return step;
 }
 
-export function folderToTour(folder: FolderNode, workspaceId: string): CodeTour {
+export function folderToTour(
+  folder: FolderNode,
+  workspaceId: string,
+  opts: { includeInline?: boolean } = {}
+): CodeTour {
+  const includeInline = opts.includeInline !== false; // 默认含
   return {
     id: `${workspaceId}::${folder.id}`,
     title: folder.title,
     steps: folder.children
       .filter((c): c is TagNode => c.type === "tag")
+      .filter(t => includeInline || !t.inline)
       .map(tagToStep)
   };
 }
@@ -36,7 +43,7 @@ export function folderToTour(folder: FolderNode, workspaceId: string): CodeTour 
 // getChildren, and their tags are decorated via treeToAllTours below.
 export function treeToTours(store: LodestarStore, workspaceId: string): CodeTour[] {
   const folders = store.tree.filter((n): n is FolderNode => n.type === "folder");
-  return folders.map(f => folderToTour(f, workspaceId));
+  return folders.map(f => folderToTour(f, workspaceId, { includeInline: false }));
 }
 
 // Every folder at ANY depth becomes its own tour (holding that folder's direct
@@ -88,6 +95,31 @@ export function suspectTour(
   return {
     id: `${workspaceId}::${SUSPECT_TOUR_ID}`,
     title: `⚠ 待处理 (${tags.length})`,
+    steps: tags.map(tagToStep)
+  };
+}
+
+export const INLINE_TOUR_ID = "__inline__";
+
+// Read-only "随手" summary view: a synthetic tour gathering every inline tag
+// (node.inline === true) found anywhere in the tree, in tree order. Tags still
+// live wherever they were created (inbox or otherwise); this only mirrors them
+// for one-shot triage/promotion.
+export function inlineTour(store: LodestarStore, workspaceId: string): CodeTour {
+  const tags: TagNode[] = [];
+  const walk = (nodes: (FolderNode | TagNode)[]): void => {
+    for (const node of nodes) {
+      if (node.type === "tag") {
+        if (node.inline === true) tags.push(node);
+      } else {
+        walk(node.children as (FolderNode | TagNode)[]);
+      }
+    }
+  };
+  walk(store.tree as (FolderNode | TagNode)[]);
+  return {
+    id: `${workspaceId}::${INLINE_TOUR_ID}`,
+    title: `💬 随手 (${tags.length})`,
     steps: tags.map(tagToStep)
   };
 }

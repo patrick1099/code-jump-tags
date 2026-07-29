@@ -100,8 +100,10 @@ export function findNode(store: LodestarStore, id: string): FoundNode | undefine
 }
 
 // Find the first tag anchored at a given file + (stored) line, anywhere in the
-// tree. Used to keep one tag per line: adding on an already-tagged line edits
-// the existing tag instead of stacking a duplicate.
+// tree. Multiple formal tags can now share a line; gotoLocation uses this to
+// resolve that line's (possibly relocated) display position, and taking the
+// first match is fine since every tag on the same stored line resolves the
+// same way.
 export function findTagByLocation(
   store: LodestarStore,
   file: string,
@@ -110,6 +112,36 @@ export function findTagByLocation(
   function search(siblings: TreeNode[]): TagNode | undefined {
     for (const node of siblings) {
       if (node.type === "tag" && node.file === file && node.line === line) {
+        return node;
+      }
+      if (node.type === "folder") {
+        const hit = search(node.children);
+        if (hit) return hit;
+      }
+    }
+    return undefined;
+  }
+  return search(store.tree);
+}
+
+// Same walk as findTagByLocation, but scoped to INLINE tags only (node.inline
+// === true). Used by the inline-note collapse/expand glue to target "the
+// inline note on this line" specifically, so it never collides with a formal
+// (non-inline) tag anchored on the same line — the two must be able to
+// coexist without one clobbering the other's note.
+export function findInlineTagByLocation(
+  store: LodestarStore,
+  file: string,
+  line: number
+): TagNode | undefined {
+  function search(siblings: TreeNode[]): TagNode | undefined {
+    for (const node of siblings) {
+      if (
+        node.type === "tag" &&
+        node.file === file &&
+        node.line === line &&
+        node.inline === true
+      ) {
         return node;
       }
       if (node.type === "folder") {
@@ -146,6 +178,24 @@ export function retargetTag(
   found.node.text = anchorText;
   found.node.original = anchorText; // 人显式动作 = 重设身份, 同时写裁判
   found.node.pattern = anchorPattern;
+  return true;
+}
+
+// 翻转一条 tag 的 inline 标志（提权=false / 降格=true）。降格进随手、提权成正式标签。
+// 返回是否命中一个 tag（未知 id / 文件夹返回 false）。
+export function setInline(
+  store: LodestarStore,
+  id: string,
+  inline: boolean
+): boolean {
+  const found = findNode(store, id);
+  if (!found || found.node.type !== "tag") return false;
+  if (inline) {
+    found.node.inline = true;
+  } else {
+    delete found.node.inline;
+    delete found.node.inlineMarker;
+  }
   return true;
 }
 

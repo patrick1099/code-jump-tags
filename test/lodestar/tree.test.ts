@@ -177,6 +177,29 @@ describe("findTagByLocation", () => {
   });
 });
 
+import { findInlineTagByLocation } from "../../src/lodestar/tree";
+
+describe("findInlineTagByLocation", () => {
+  it("returns the INLINE tag when a formal tag and an inline tag share a line", () => {
+    const s = createEmptyStore();
+    addTag(s, { ...tag("formal"), file: "x.c", line: 10 });
+    addTag(s, { ...tag("inline"), file: "x.c", line: 10, inline: true });
+    expect(findInlineTagByLocation(s, "x.c", 10)!.id).toBe("inline");
+  });
+
+  it("returns undefined when the line only has a formal tag", () => {
+    const s = createEmptyStore();
+    addTag(s, { ...tag("formal"), file: "x.c", line: 10 });
+    expect(findInlineTagByLocation(s, "x.c", 10)).toBeUndefined();
+  });
+
+  it("returns undefined for an unknown line", () => {
+    const s = createEmptyStore();
+    addTag(s, { ...tag("inline"), file: "x.c", line: 10, inline: true });
+    expect(findInlineTagByLocation(s, "x.c", 99)).toBeUndefined();
+  });
+});
+
 describe("reorder via moveNode (up/down semantics)", () => {
   it("moves a middle node up", () => {
     const s = createEmptyStore();
@@ -338,5 +361,38 @@ describe("retargetTag writes original", () => {
     expect(tag.original).toBe("newline()");
     expect(tag.file).toBe("b.ts");
     expect(tag.line).toBe(9);
+  });
+});
+
+import { setInline } from "../../src/lodestar/tree";
+
+describe("setInline 提权/降格", () => {
+  function makeStore() {
+    return {
+      version: 1 as const,
+      tree: [
+        { type: "folder" as const, id: "f", title: "组", children: [
+          { type: "tag" as const, id: "t", note: "n", file: "a", line: 1, inline: true, inlineMarker: "//me:", createdAt: "x" }
+        ] }
+      ]
+    };
+  }
+  it("提权：清 inline 与 inlineMarker", () => {
+    const s = makeStore();
+    expect(setInline(s, "t", false)).toBe(true);
+    const tag: any = (s.tree[0] as any).children[0];
+    expect(tag.inline).toBeUndefined();
+    expect(tag.inlineMarker).toBeUndefined();
+  });
+  it("降格：置 inline=true", () => {
+    const s = makeStore();
+    (s.tree[0] as any).children[0].inline = undefined;
+    expect(setInline(s, "t", true)).toBe(true);
+    expect((s.tree[0] as any).children[0].inline).toBe(true);
+  });
+  it("未知 id / 文件夹返回 false", () => {
+    const s = makeStore();
+    expect(setInline(s, "nope", true)).toBe(false);
+    expect(setInline(s, "f", true)).toBe(false);
   });
 });

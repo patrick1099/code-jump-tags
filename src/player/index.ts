@@ -38,6 +38,7 @@ import {
 } from "../utils";
 import { registerCodeStatusModule } from "./codeStatus";
 import { registerPlayerCommands } from "./commands";
+import { registerInlineNotes } from "./inlineNotes";
 import { getTourSteps, registerDecorators } from "./decorator";
 import { registerFileSystemProvider } from "./fileSystem";
 import { registerTextDocumentContentProvider } from "./fileSystem/documentProvider";
@@ -501,6 +502,7 @@ export function registerPlayerModule(context: ExtensionContext) {
   registerStatusBar();
   registerDecorators();
   registerCodeStatusModule();
+  registerInlineNotes();
 
   initializeStorage(context);
 

@@ -314,18 +314,11 @@ function cursorTarget():
   return { file, line, text, pattern };
 }
 
-// 把 tagId 重锚到当前光标行;目标行已被「别的」标签占用 → 拒绝(守一行一签)。
+// 把 tagId 重锚到当前光标行(允许落在已有标签的行)。
 async function placeTagAtCursor(tagId: string): Promise<boolean> {
   const target = cursorTarget();
   if (!target) return false;
   const store = getStore();
-  const existing = findTagByLocation(store, target.file, target.line);
-  if (existing && existing.id !== tagId) {
-    const label =
-      (existing.note || "").split(/\r?\n/)[0].trim() || "(无注释)";
-    window.showInformationMessage(`Code Jump Tags: 该行已有标签「${label}」`);
-    return false;
-  }
   // 记录「移动前」的锚供撤回用:必须在 retargetTag 原地改写之前拷出字段值。
   const before = findNode(store, tagId);
   const fromAnchor: Anchor | undefined =
@@ -427,20 +420,11 @@ function refreshMoveContextKeys() {
   );
 }
 
-// 把标签放到一个明确的锚点(撤回/恢复用):守一行一签 → retargetTag → 存盘 → 跳转。
-// 返回 ok | occupied(目标行被别的标签占用) | missing(标签已删/找不到)。
-type ApplyResult = "ok" | "occupied" | "missing";
+// 把标签放到一个明确的锚点(撤回/恢复用):retargetTag → 存盘 → 跳转。
+// 返回 ok | missing(标签已删/找不到)。
+type ApplyResult = "ok" | "missing";
 async function applyMove(tagId: string, target: Anchor): Promise<ApplyResult> {
   const store = getStore();
-  const existing = findTagByLocation(store, target.file, target.line);
-  if (existing && existing.id !== tagId) {
-    const label =
-      (existing.note || "").split(/\r?\n/)[0].trim() || "(无注释)";
-    window.showInformationMessage(
-      `Code Jump Tags: 原位置已被标签「${label}」占用`
-    );
-    return "occupied";
-  }
   if (
     !retargetTag(store, tagId, target.file, target.line, target.text, target.pattern)
   ) {
@@ -462,8 +446,6 @@ export async function undoMove() {
   const r = await applyMove(entry.tagId, entry.from);
   if (r === "ok") {
     pushRedo(s_moveJournal, entry);
-  } else if (r === "occupied") {
-    pushUndo(s_moveJournal, entry); // 失败回滚:留在 undo 可重试
   }
   // r === "missing": 丢弃(标签已删,永远 apply 不了)
   refreshMoveContextKeys();
@@ -479,8 +461,6 @@ export async function redoMove() {
   const r = await applyMove(entry.tagId, entry.to);
   if (r === "ok") {
     pushUndo(s_moveJournal, entry);
-  } else if (r === "occupied") {
-    pushRedo(s_moveJournal, entry);
   }
   refreshMoveContextKeys();
 }
@@ -502,8 +482,6 @@ export async function undoTagMove(node: any) {
   const r = await applyMove(entry.tagId, entry.from);
   if (r === "ok") {
     pushRedo(s_moveJournal, entry);
-  } else if (r === "occupied") {
-    pushUndo(s_moveJournal, entry);
   }
   refreshMoveContextKeys();
 }

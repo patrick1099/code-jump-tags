@@ -6,7 +6,7 @@ import { debounce } from "throttle-debounce";
 import * as vscode from "vscode";
 import { FS_SCHEME_CONTENT, ICON_URL } from "../constants";
 import { getStore, rebuildTours, saveStore } from "../lodestar/persistence";
-import { findNode, LineEdit } from "../lodestar/tree";
+import { findNode, LineEdit, shiftedLine } from "../lodestar/tree";
 import {
   reanchorTag,
   resolveTagLine,
@@ -16,6 +16,7 @@ import {
 import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getSuspect } from "../lodestar/suspect";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
+import { lineLensTitles } from "./lensTitles";
 
 const DISABLED_SCHEMES = [FS_SCHEME_CONTENT, "comment"];
 
@@ -251,6 +252,11 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
       const found = findNode(cache0, step.id);
       if (!found || found.node.type !== "tag") continue;
       const node = found.node;
+      // inline tag 的锚由 inlineNotes 的折叠路径独占改写（永远写剥净后的干净代码）。
+      // 展开态的行文本此刻含 marker + 私密 note，若在此从当前行文本刷新锚，会把私密
+      // 内容漏进 node.text/pattern 并被 debouncedSaveStore 落盘（违反「身份锚永不含
+      // marker」）。故 inline tag 完全跳过同行锚刷新。
+      if (node.inline) continue;
       if (!editedLines0.has(node.line - 1)) continue;
       const cur = lines0[node.line - 1];
       if (cur === undefined) continue;
@@ -286,6 +292,17 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
       continue;
     }
     const node = found.node;
+    // inline tag：只跟随行号位移，绝不从当前行文本刷新锚。若此刻它正处于展开态，当前行
+    // 含 marker + 私密 note；reanchorTag 会把该文本当作新锚采纳（漏进 text/pattern 并落
+    // 盘）。锚的文本刷新由 inlineNotes 的折叠路径独占（每次折叠都从剥净代码重锚）。
+    if (node.inline) {
+      const shifted = shiftedLine(node.line - 1, edits) + 1;
+      if (shifted !== node.line) {
+        node.line = shifted;
+        changed++;
+      }
+      continue;
+    }
     // Re-anchor: shift by the edit, let content recovery override a wrong guess
     // (overwrite case), and refresh the anchor pattern from the new line text so
     // the stored anchor never goes stale. Persist BOTH line and pattern.
@@ -335,22 +352,45 @@ class TagCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     const steps = await getTourSteps(document);
-    return steps
-      .filter(
-        ([, step, , line]) =>
-          line !== undefined &&
-          line !== null &&
-          stepNotePosition(step) === "above"
-      )
-      .map(([, step, , line]) => {
-        const note = (step.description || "").split(/\r?\n/)[0].trim();
-        // Clicking the lens re-edits the tag's note (CodeTour-like).
-        return new vscode.CodeLens(new vscode.Range(line!, 0, line!, 0), {
-          title: note ? `⌖ ${note}` : "⌖",
-          command: step.id ? "codeJumpTags.editNote" : "",
-          arguments: step.id ? [step.id] : undefined
-        });
+    // 只取「行上方」样式、有解析出显示行的 step。
+    const above = steps.filter(
+      ([, step, , line]) =>
+        line !== undefined && line !== null && stepNotePosition(step) === "above"
+    );
+
+    // 按显示行分组:同一行多条标签渲染成 `⌖ A | ⌖ B`,每条 lens 各自可点、
+    // 各编辑各的 tag。
+    const byLine = new Map<number, CodeTourStepTuple[]>();
+    for (const t of above) {
+      const line = t[3]!;
+      const group = byLine.get(line);
+      if (group) group.push(t);
+      else byLine.set(line, [t]);
+    }
+
+    const lenses: vscode.CodeLens[] = [];
+    for (const [line, group] of byLine) {
+      // createdAt 升序、id 兜底 → 稳定的 | 左右序。
+      group.sort((a, b) => {
+        const ca = a[1].createdAt ?? "";
+        const cb = b[1].createdAt ?? "";
+        if (ca !== cb) return ca < cb ? -1 : 1;
+        return (a[1].id ?? "") < (b[1].id ?? "") ? -1 : 1;
       });
+      const titles = lineLensTitles(
+        group.map(([, step]) => (step.description || "").split(/\r?\n/)[0].trim())
+      );
+      group.forEach(([, step], i) => {
+        lenses.push(
+          new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
+            title: titles[i],
+            command: step.id ? "codeJumpTags.editNote" : "",
+            arguments: step.id ? [step.id] : undefined
+          })
+        );
+      });
+    }
+    return lenses;
   }
 }
 
