@@ -123,6 +123,13 @@ export async function updateDecorations(
   const gutterDecorations: vscode.DecorationOptions[] = [];
   const inlineDecorations: vscode.DecorationOptions[] = [];
   const suspectDecorations: vscode.DecorationOptions[] = [];
+  // A line can hold multiple formal tags. VS Code shows only ONE hover for
+  // overlapping same-type decorations, so we collect each line's tags here and
+  // merge them into a single gutter hover listing every note + its own ✎.
+  const gutterLines = new Map<
+    number,
+    { createdAt: string; id: string; md: string }[]
+  >();
 
   for (const [, step, , line] of store.activeEditorSteps!) {
     if (line === undefined || line === null || line >= editor.document.lineCount) {
@@ -130,15 +137,6 @@ export async function updateDecorations(
     }
     const full = (step.description || "").trim();
     const note = full.split(/\r?\n/)[0];
-    const hover = new vscode.MarkdownString(full);
-    hover.isTrusted = true;
-    // Make the hover offer a re-edit link (works in both note positions).
-    if (step.id) {
-      const args = encodeURIComponent(JSON.stringify([step.id]));
-      hover.appendMarkdown(
-        `${full ? "\n\n" : ""}[✎ 编辑注释](command:codeJumpTags.editNote?${args})`
-      );
-    }
 
     const suspect = step.id ? getSuspect(step.id) : undefined;
     if (suspect) {
@@ -170,11 +168,26 @@ export async function updateDecorations(
       continue; // 可疑行不再进普通 gutter
     }
 
-    // Gutter icon + whole-line hover live on the wide ClosedClosed range.
-    gutterDecorations.push({
-      range: new vscode.Range(line, 0, line, 1000),
-      hoverMessage: full ? hover : undefined
-    });
+    // Register this display line (the gutter icon shows even for an empty-note
+    // tag) and, when the tag has a note, add its own block — note + a ✎ edit
+    // link keyed to THIS tag — to the line's merged hover.
+    let entries = gutterLines.get(line);
+    if (!entries) {
+      entries = [];
+      gutterLines.set(line, entries);
+    }
+    if (full) {
+      const editLink = step.id
+        ? `\n\n[✎ 编辑注释](command:codeJumpTags.editNote?${encodeURIComponent(
+            JSON.stringify([step.id])
+          )})`
+        : "";
+      entries.push({
+        createdAt: step.createdAt ?? "",
+        id: step.id ?? "",
+        md: `${full}${editLink}`
+      });
+    }
 
     // End-of-line note is a separate ClosedOpen decoration anchored at the
     // line's true end, so it always trails the code as the line grows.
@@ -191,6 +204,26 @@ export async function updateDecorations(
         }
       });
     }
+  }
+
+  // One gutter decoration per line, its hover merging all that line's tags in
+  // createdAt order (id tiebreak) — same order as the above-line CodeLenses.
+  for (const [line, entries] of gutterLines) {
+    entries.sort((a, b) => {
+      if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+    let hover: vscode.MarkdownString | undefined;
+    if (entries.length) {
+      hover = new vscode.MarkdownString(
+        entries.map(e => e.md).join("\n\n---\n\n")
+      );
+      hover.isTrusted = true;
+    }
+    gutterDecorations.push({
+      range: new vscode.Range(line, 0, line, 1000),
+      hoverMessage: hover
+    });
   }
 
   editor.setDecorations(TOUR_DECORATOR, gutterDecorations);
