@@ -12,11 +12,11 @@
 - **设计稿:** `docs/superpowers/specs/2026-07-27-suspect-live-adopt-design.md`
 - **实现前:** 先补一轮 brainstorm 定死设计稿里的开放题(相似度地板要不要、配置开关、原子替换写入的监听覆盖),再单独成 SDD 计划。
 
-### 2. hover 支持一行多签
-- **状态:** 未做(用户 2026-07-27 让先放着)。
-- **要做什么:** 同一行多条正式标签,悬停只弹一条。根因:`decorator.ts:174-177` 每条标签各 push 一个同 range 的 gutter 装饰、各带 hoverMessage,VS Code 对同装饰类型的重叠 range 只显示一个。
-- **修法:** 像 `provideCodeLenses` 那样把 gutter 装饰**按行分组**,合成一条包含该行全部标签注释 + 各自 `[✎ 编辑注释]`(各 keyed 到自己的 `step.id`)的 hoverMessage,一行一条装饰。约在 `updateDecorations`(`decorator.ts` ~127-177)一处集中改。
-- **归属:** 「一行多签(2026-07-27)」功能的收尾项;设计稿见 `docs/superpowers/specs/2026-07-27-formal-tags-multi-per-line-design.md`(渲染部分)。
+### 2. hover 支持一行多签 —— ✅ 已实现,待 F5
+- **状态:** 已实现(分支 `feat/hover-multi-sign`,commit `967507c`),build 干净、单测 167/167;**待 F5 视觉验收**后合并 main。
+- **做了什么:** `updateDecorations`(`decorator.ts`)把同一行的正式标签收进 `gutterLines` Map,循环后按 `createdAt`(id 兜底,与上方 CodeLens 同序)排序,合成**一条** hoverMessage——逐条列注释 + 各自 `[✎ 编辑注释]`(各 keyed 到自己 `step.id`),条目间以 `---` 分隔;一行推一条 gutter 装饰(图标仍一行一个)。
+- **F5 验:** 同行 A、B 两条 → 悬停弹一个框、上下列出 A 和 B,各带自己的 ✎ 点进去编辑各的;单条行行为不变;`---` 分隔线好不好看按需调。
+- **归属:** 「一行多签(2026-07-27)」功能的收尾项。
 
 ### 3. F5 手动验收(合并后补验)
 > 本仓库合并到 main 时,以下项**未经 F5 实测**(用户暂不验)。真正用起来前建议在 Extension Development Host 走一遍。
