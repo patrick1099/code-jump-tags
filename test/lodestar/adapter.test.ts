@@ -150,6 +150,18 @@ describe("suspectTour", () => {
   it("empty when no suspects", () => {
     expect(suspectTour(store, "ws", []).steps).toEqual([]);
   });
+  it("随手私记即使失配也不进「待处理」（②：随手绝不出现在侧边栏）", () => {
+    const s: any = {
+      version: 1,
+      tree: [{ type: "folder", id: "f", title: "x", children: [
+        { type: "tag", id: "normal", note: "正式", file: "a.ts", line: 1 },
+        { type: "tag", id: "inl", note: "随手", file: "a.ts", line: 1, inline: true }
+      ] }]
+    };
+    const tour = suspectTour(s, "ws", ["normal", "inl"]);
+    expect(tour.steps.map(st => st.id)).toEqual(["normal"]);
+    expect(tour.title).toBe("⚠ 待处理 (1)");
+  });
 });
 
 describe("inline note 树可见性", () => {
@@ -168,6 +180,13 @@ describe("inline note 树可见性", () => {
   it("treeToTours 隐藏 inline（树里只剩正式标签）", () => {
     const tours = treeToTours(s, "ws");
     expect(tours[0].steps.map(st => st.id)).toEqual(["normal"]);
+  });
+
+  it("inline 标志一路传到 step（装饰层据此不画 gutter ⌖ 与失配 ?）", () => {
+    const tours = treeToAllTours(s, "ws");
+    const steps = tours.flatMap(t => t.steps);
+    expect(steps.find(st => st.id === "inl")!.inline).toBe(true);
+    expect(steps.find(st => st.id === "normal")!.inline).toBeUndefined();
   });
 
   it("treeToAllTours 保留 inline（装饰源含随手）", () => {

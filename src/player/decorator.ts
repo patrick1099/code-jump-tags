@@ -17,6 +17,8 @@ import { CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getSuspect } from "../lodestar/suspect";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 import { lineLensTitles } from "./lensTitles";
+import { canonicalText } from "./inlineNotes";
+import { recentlyExternal } from "./externalWatch";
 
 const DISABLED_SCHEMES = [FS_SCHEME_CONTENT, "comment"];
 
@@ -71,6 +73,10 @@ export async function getTourSteps(
   );
 
   const contents = document.getText();
+  // 锚匹配一律用归一化文本：展开态的行带着 `//me: 私记`，拿原文去比身份锚会把该行上
+  // 的标签（含并存的正式标签）判成失配，而失配行在下面会被 `continue` 掉——行尾小字
+  // 跟着一起消失。legacy 的 pattern 分支仍用原文，因为它要 document.positionAt 的偏移。
+  const anchorContents = canonicalText(document, contents);
   const tourSteps = await Promise.all(
     steps.map(async ([tour, step, stepNumber]) => {
       const workspaceRoot = getWorkspaceUri(tour);
@@ -84,7 +90,7 @@ export async function getTourSteps(
           // reload (the stored line goes stale, but the line's text is found
           // again). This is the SAME recovery the jump command uses, so the
           // marker and the jump target always agree.
-          line = resolveTagLine(contents, step.line, step.original, step.text, step.pattern) - 1;
+          line = resolveTagLine(anchorContents, step.line, step.original, step.text, step.pattern) - 1;
         } else if (step.pattern) {
           const match = contents.match(new RegExp(step.pattern, "m"));
           if (match) {
@@ -137,6 +143,26 @@ export async function updateDecorations(
     }
     const full = (step.description || "").trim();
     const note = full.split(/\r?\n/)[0];
+
+    // 随手私记只画行尾那条小字 —— 不画 gutter 的 ⌖ 标记，也不画失配的 ? 标记。
+    // 它是行尾的一次性便条，不该占用「这一行有正式标签」的视觉语汇；失配对它也没有
+    // triage 意义（同理它已被排除在侧边栏的「待处理」分组之外）。
+    if (step.inline) {
+      if (note) {
+        const endCol = editor.document.lineAt(line).text.length;
+        inlineDecorations.push({
+          range: new vscode.Range(line, endCol, line, endCol),
+          renderOptions: {
+            after: {
+              contentText: `    ${note}`,
+              color: new vscode.ThemeColor("editorCodeLens.foreground"),
+              fontStyle: "italic"
+            }
+          }
+        });
+      }
+      continue;
+    }
 
     const suspect = step.id ? getSuspect(step.id) : undefined;
     if (suspect) {
@@ -277,7 +303,10 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
       }
     }
     const steps0 = await getTourSteps(e.document);
-    const lines0 = e.document.getText().split(/\r?\n/);
+    // 归一化后再取行文本：否则同一行上并存的正式标签会在这里被刷成含 `//me: 私记`
+    // 的脏锚，并由下面的 debouncedSaveStore 落盘——私记就从「不落源码」变成「落进了
+    // 正式标签的身份锚」，且立刻触发失配。
+    const lines0 = canonicalText(e.document).split(/\r?\n/);
     const cache0 = getStore();
     let touched = 0;
     for (const [, step] of steps0) {
@@ -298,6 +327,9 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
       if (t !== node.text || p !== node.pattern) {
         node.text = t;
         node.pattern = p;
+        // 这次 buffer 变化是我们看着发生的 → 现内容可信，不该被判失配。
+        // 唯一的例外是「刚有外部写盘」——那时这次变化其实是外部内容被载入进来。
+        if (!recentlyExternal(node.file)) node.witnessed = true;
         touched++;
       }
     }
@@ -313,7 +345,8 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
   // Which tags live in this document (resolves each tag's file uri the same way
   // the decorations do, so matching is exact).
   const steps = await getTourSteps(e.document);
-  const text = e.document.getText();
+  // 同上：reanchorTag 会从解析出的行重新采纳锚文本，必须喂归一化文本。
+  const text = canonicalText(e.document);
   const cache = getStore();
   let changed = 0;
   for (const [, step] of steps) {
@@ -351,6 +384,10 @@ async function trackLineShifts(e: vscode.TextDocumentChangeEvent) {
     ) {
       node.line = after.line;
       node.pattern = after.pattern;
+      // 同上：只有不是「刚被外部写盘后载入进来」的变化才让现内容变得可信。
+      if (after.text !== node.text && !recentlyExternal(node.file)) {
+        node.witnessed = true;
+      }
       node.text = after.text;
       changed++;
     }

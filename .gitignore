@@ -3,3 +3,7 @@ node_modules
 .vscode-test/
 *.vsix
 .DS_Store
+
+# E2E fixture 工作区里由用例生成的东西（只有 sample.js 本体要进版本库）
+test-e2e/fixture/*
+!test-e2e/fixture/sample.js

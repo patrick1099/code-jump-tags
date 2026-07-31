@@ -39,6 +39,7 @@ export interface CodeTourStep {
   markerTitle?: string;
   notePosition?: "above" | "end"; // Code Jump Tags: per-tag note placement
   createdAt?: string; // Code Jump Tags: tag 创建时间,同行多签按此稳定排序
+  inline?: boolean; // Code Jump Tags: 随手私记(行尾 //me:)。只画行尾小字,不画任何 gutter 标记
 }
 
 export interface CodeTour {

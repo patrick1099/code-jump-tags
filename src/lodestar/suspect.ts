@@ -11,6 +11,7 @@ export interface FileTag {
   line: number;
   original?: string;
   current?: string;
+  witnessed?: boolean; // 现内容是我们在编辑器里亲眼看着变成这样的
 }
 
 export interface SuspectInfo {
@@ -27,6 +28,10 @@ export function classifyFileTags(tags: FileTag[], fileText: string): SuspectInfo
   for (const t of tags) {
     const m = matchAnchor(fileText, t.line, t.original, t.current);
     if (m.status === "original") continue; // healthy
+    // 软可疑(current 命中) + 这次分歧是我们亲眼看着发生的 => 不是失配，是用户自己改的。
+    // 失配只该留给「没看见的改动」：文件被别的编辑器改、git 拉取、VS Code 没开着时被动过。
+    // 硬可疑(lost)不在此列 —— 连现内容都对不上，说明这行确实在我们看不见的地方变了。
+    if (m.status === "current" && t.witnessed) continue;
     out.push({
       id: t.id,
       file: t.file,

@@ -18,6 +18,7 @@ import {
   findNode,
   getOrCreateInbox,
   newFolderId,
+  removeToTrash,
   setInline
 } from "../lodestar/tree";
 import { lineAnchorText, linePattern } from "../lodestar/relocate";
@@ -25,8 +26,18 @@ import {
   findMarker,
   fullMarkers,
   parseInlineNote,
+  stripInlineNotesFromText,
   toInlineText
 } from "../lodestar/inlineNote";
+import { removeSuspects } from "../lodestar/suspect";
+import { DEFAULT_EXCLUDE, isExcluded } from "../lodestar/exclude";
+
+// 排除名单也现读，跟着用户设置走（同 inlineConfig）。
+export function excludePatterns(): string[] {
+  return vscode.workspace
+    .getConfiguration("codeJumpTags")
+    .get<string[]>("exclude", DEFAULT_EXCLUDE);
+}
 import { TagNode } from "../lodestar/types";
 import { getRelativePath } from "../utils";
 
@@ -96,14 +107,51 @@ export function markersForDocument(doc: vscode.TextDocument): string[] {
   return fullMarkers(lineCommentFor(doc.languageId), inlineConfig().markers);
 }
 
+// 「归一化文本」：把文档里所有展开态的 marker 尾巴剥掉后的全文，行数不变。
+//
+// 任何要拿去做锚匹配的文件文本都必须走这里，否则一条正在展开的行会让该行上的所有
+// 标签（含同行并存的正式标签）被判成失配 —— 身份锚存的是剥净的代码，而 buffer 此刻
+// 带着 `//me: 私记`。功能关闭时原样返回：没人会注入 marker，也就无需剥。
+export function canonicalText(doc: vscode.TextDocument, text?: string): string {
+  const raw = text ?? doc.getText();
+  if (!inlineConfig().enabled) return raw;
+  return stripInlineNotesFromText(raw, markersForDocument(doc));
+}
+
+// 删除一条随手私记：连同它在可疑注册表里的残留一起清掉。走回收站（与树上的删除
+// 同一条路），所以误删可从「回收站」里捞回来。
+async function deleteInlineTag(tagId: string): Promise<void> {
+  removeToTrash(getStore(), tagId);
+  removeSuspects([tagId]);
+  await saveStore();
+}
+
 // ── 要点 5：re-entrancy 防抖 ─────────────────────────────────────────────────
 //
 // `collapseLine`/`expandLine` 里的 `editor.edit` 会回头触发 `onDidChangeTextDocument`
 // （decorator.ts 的 trackLineShifts）与可能的 selection 事件。模块级 `busy` 在进入
 // edit 前置位、`finally` 复位；所有事件回调开头 `if (busy) return;`，避免自触发递归。
-let busy = false;
+// 计数而非布尔：折叠/展开会嵌套在 handleCursor 的临界区里，布尔的 finally 会在内层
+// 提前把闸放掉。
+let busyDepth = 0;
+const isBusy = (): boolean => busyDepth > 0;
+
+// ── 串行闸 ───────────────────────────────────────────────────────────────────
+//
+// selection / active-editor 回调都是 fire-and-forget 的，VS Code 不会等上一个跑完再
+// 投递下一个。而 `collapseLine` 末尾的 `await saveStore()` 是个 busy 已复位的窗口——
+// 第二个事件能在此挤进来，对同一行再折叠/再展开一次：marker 被重新注回刚剥净的行，
+// 或刚建好的标签被当成「用户删了」删掉。所有会改 buffer / store 的路径统一排队。
+let queue: Promise<unknown> = Promise.resolve();
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => undefined);
+  return run;
+}
 
 // per-editor 的「当前展开行」，键用 document uri（editor 对象本身是易变的）。
+// 它同时是「这一行的 marker 是我们注进去的」这一事实的唯一记录——删除手势要靠它
+// 区分「用户把私记删了」和「这行本来就没 marker」。
 const expandedLines = new Map<string, number | null>();
 
 // 工作区相对路径：取法与 recorder/commands.ts 建 tag 时完全一致
@@ -114,9 +162,14 @@ function relFileFor(editor: vscode.TextEditor): string | undefined {
   return getRelativePath(folders[0].uri.path, editor.document.uri.path);
 }
 
-// 只在真实磁盘文件上工作：相对路径锚只对 file scheme 有意义。
+// 只在真实磁盘文件上工作：相对路径锚只对 file scheme 有意义。并且跳过排除名单——
+// 尤其是扩展自己的 `.code-jump-tags/`：store.json 里存着 note 文本，被当普通文件扫描
+// 时其中的 marker 会被折叠、反过来改写 store.json。
 function isEligible(editor: vscode.TextEditor): boolean {
-  return editor.document.uri.scheme === "file";
+  if (editor.document.uri.scheme !== "file") return false;
+  const file = relFileFor(editor);
+  if (file === undefined) return false;
+  return !isExcluded(file, excludePatterns());
 }
 
 // ── 要点 2：折叠 ─────────────────────────────────────────────────────────────
@@ -125,7 +178,11 @@ function isEligible(editor: vscode.TextEditor): boolean {
 // 再把 buffer 剥回干净代码并存盘。
 export async function collapseLine(
   editor: vscode.TextEditor,
-  line0: number
+  line0: number,
+  // 只有「光标离开一条我们展开过的行」这条路径才带 true。删除是个不可逆的手势，
+  // 必须确认这一行的 marker 本来就是我们注进去的、现在被用户抹掉了；扫残留兜底
+  // （rescanDocument）遍历的是任意行，绝不能把「这行本来就没 marker」当成删除意图。
+  wasExpanded = false
 ): Promise<void> {
   if (line0 < 0 || line0 >= editor.document.lineCount) return;
 
@@ -134,7 +191,6 @@ export async function collapseLine(
   const lineText = doc.lineAt(line0).text;
 
   const parsed = parseInlineNote(lineText, markers);
-  if (!parsed) return; // 该行已无 marker（例如用户把它删了）——无事可做
 
   const file = relFileFor(editor);
   if (file === undefined) return;
@@ -144,10 +200,21 @@ export async function collapseLine(
   // 正式标签与随手 note 必须能在同一行共存，互不覆盖对方的 note。
   const existing = findInlineTagByLocation(getStore(), file, line1);
 
-  // 用户把 note 删空、且该行没有 inline tag（可能压根没 tag，也可能只有一个
-  // 正式标签）→ 视为「不要这条 note」，仅剥净 buffer、不建 tag、不碰正式标签。
-  if (parsed.note.length === 0 && !existing) {
+  // 「删掉行内那段文字 = 删掉这条私记」。sidecar 是唯一真源，所以在此之前，把
+  // `//me: 私记` 从行里删掉是**没有意义**的：tag 还在，光标一回来 expandLine 就把它
+  // 原样注回去，用户看到的就是「删不掉、还越删越多」。这里补上那个出口——光标离开
+  // 一条已无 marker 的行时，若该行挂着 inline tag，就删掉它。
+  if (!parsed) {
+    if (wasExpanded && existing) await deleteInlineTag(existing.id);
+    return;
+  }
+
+  // note 被清空（只剩一个光秃秃的 marker）同样按「不要这条」处理：剥净 buffer，
+  // 该行若有 inline tag 一并删掉——留着它只会渲染一条空小字，并在下次展开时把
+  // `//me: ` 再吐回行尾，是同一个「删不掉」的另一张脸。绝不碰同行的正式标签。
+  if (parsed.note.length === 0) {
     await stripBuffer(editor, line0, parsed.code);
+    if (existing) await deleteInlineTag(existing.id);
     return;
   }
 
@@ -208,14 +275,14 @@ async function stripBuffer(
   code: string
 ): Promise<boolean> {
   const range = editor.document.lineAt(line0).range;
-  busy = true;
+  busyDepth++;
   try {
     return await editor.edit(
       b => b.replace(range, code),
       { undoStopBefore: false, undoStopAfter: false }
     );
   } finally {
-    busy = false;
+    busyDepth--;
   }
 }
 
@@ -243,11 +310,17 @@ export async function expandLine(
 
   const marker = tag.inlineMarker ?? markers[0];
   if (!marker) return;
+
+  // 残骸守卫：toInlineText 是把 note 拼到**当前行文本尾巴**上。若用户只删掉了 marker
+  // 而把 note 文字留在了行里，再展开就变成 `code  私记  //me: 私记`，每删一轮多沉淀
+  // 一份——正是「无限增殖」。当前行已经含有这段 note 时一律不注入。
+  if (tag.note && lineText.includes(tag.note)) return;
+
   const text = toInlineText(lineText, tag.note, marker);
 
   const range = doc.lineAt(line0).range;
   let ok = false;
-  busy = true;
+  busyDepth++;
   try {
     // IMPORTANT#2：同样检查 editor.edit 结果。展开不落盘，失败仅意味着注入没发生；
     // 早退即可，调用方后续的折叠会因该行不含 marker 而自然成为 no-op。
@@ -256,7 +329,7 @@ export async function expandLine(
       { undoStopBefore: false, undoStopAfter: false }
     );
   } finally {
-    busy = false;
+    busyDepth--;
   }
   if (!ok) return;
 }
@@ -271,49 +344,74 @@ export async function expandLine(
 async function onSelectionChange(
   e: vscode.TextEditorSelectionChangeEvent
 ): Promise<void> {
-  if (busy) return; // 自己的 edit 引发的 selection 事件，忽略
+  if (isBusy()) return; // 自己的 edit 引发的 selection 事件，忽略
   if (!inlineConfig().enabled) return; // 整层短路
 
   const editor = e.textEditor;
   if (!isEligible(editor)) return;
   if (e.selections.length === 0) return;
 
-  const doc = editor.document;
-  const key = doc.uri.toString();
-  const cur0 = e.selections[0].active.line;
-  const prev = expandedLines.get(key) ?? null;
+  // 排队执行。事件里带的 selection 到临界区时可能已经过期（用户还在动光标），
+  // 所以 handleCursor 里一律现读 editor.selection，不用事件负载。
+  await serialize(() => handleCursor(editor));
+}
 
-  // 离开上一条展开/待折叠行 → 折叠它。
-  if (prev !== null && prev !== cur0) {
-    await collapseLine(editor, prev);
-    expandedLines.set(key, null);
-  }
+async function handleCursor(editor: vscode.TextEditor): Promise<void> {
+  busyDepth++;
+  try {
+    const doc = editor.document;
+    const key = doc.uri.toString();
+    const cur0 = editor.selection?.active.line;
+    if (cur0 === undefined) return;
+    const prev = expandedLines.get(key) ?? null;
 
-  // 重新评估当前行（折叠可能已改动文档，重新读取）。
-  if (cur0 < 0 || cur0 >= doc.lineCount) {
-    expandedLines.set(key, null);
-    return;
-  }
-  const lineText = doc.lineAt(cur0).text;
-  const markers = markersForDocument(doc);
+    // 光标没离开这一行 —— 用户正在这行上编辑，什么都别做。
+    //
+    // 这是「无限增殖」的病灶：以前这里只跳过了折叠，却继续往下走到「这行有标签吗？
+    // 有 → 展开」。用户在展开态一路按退格，把 `//me:` 啃成 `//me` 的那一刻 marker 就
+    // 认不出来了，于是这条路径判定「有标签、没展开」，当场把整条私记原地重注一份，
+    // 拼在残骸后面：`code  //me  //me: 私记`。再退格再啃坏，再注一份——越删越长。
+    //
+    // 展开/折叠的语义本来就只跟「进入/离开这一行」挂钩，行内编辑一律不该触发任何注入。
+    // 注意 expandedLines 这里保持不动（仍指向本行）：用户若把 marker 删干净再点走，
+    // 离开时的折叠会带着删除意图执行，正好就是「删掉私记」那个手势。
+    if (prev === cur0) return;
 
-  if (parseInlineNote(lineText, markers) !== null) {
-    // 含 marker（用户刚敲的，或刚被展开的）：记住，等离开再折叠，别打断打字。
-    expandedLines.set(key, cur0);
-    return;
-  }
+    // 离开上一条展开/待折叠行 → 折叠它。prev 非空即代表这行的 marker 是我们注进去
+    // 的（或用户刚敲、还没折叠），所以这条路径带上删除意图：marker 没了就是用户删了。
+    if (prev !== null && prev !== cur0) {
+      expandedLines.set(key, null); // 先清，失败也不留下会被二次折叠的悬空状态
+      await collapseLine(editor, prev, true);
+    }
 
-  const file = relFileFor(editor);
-  if (file === undefined) {
-    expandedLines.set(key, null);
-    return;
-  }
-  const tag = findInlineTagByLocation(getStore(), file, cur0 + 1);
-  if (tag) {
-    await expandLine(editor, cur0);
-    expandedLines.set(key, cur0);
-  } else {
-    expandedLines.set(key, null);
+    // 重新评估当前行（折叠可能已改动文档，重新读取）。
+    if (cur0 < 0 || cur0 >= doc.lineCount) {
+      expandedLines.set(key, null);
+      return;
+    }
+    const lineText = doc.lineAt(cur0).text;
+    const markers = markersForDocument(doc);
+
+    if (parseInlineNote(lineText, markers) !== null) {
+      // 含 marker（用户刚敲的，或刚被展开的）：记住，等离开再折叠，别打断打字。
+      expandedLines.set(key, cur0);
+      return;
+    }
+
+    const file = relFileFor(editor);
+    if (file === undefined) {
+      expandedLines.set(key, null);
+      return;
+    }
+    const tag = findInlineTagByLocation(getStore(), file, cur0 + 1);
+    if (tag) {
+      await expandLine(editor, cur0);
+      expandedLines.set(key, cur0);
+    } else {
+      expandedLines.set(key, null);
+    }
+  } finally {
+    busyDepth--;
   }
 }
 
@@ -328,22 +426,34 @@ async function onSelectionChange(
 // 出「跨行」的折叠更稳（不会因为前面行数变化打乱后面行号）。跳过光标当前行——那行
 // 可能是用户正在敲的 note，被吞掉会打断输入（同 onSelectionChange 的「待折叠」语义）。
 export async function rescanDocument(editor: vscode.TextEditor): Promise<void> {
-  if (busy) return; // 有折叠/展开 edit 正在进行，避免重入
+  if (isBusy()) return; // 有折叠/展开 edit 正在进行，避免重入
   if (!isEligible(editor)) return;
   if (!inlineConfig().enabled) return;
 
-  const doc = editor.document;
-  const markers = markersForDocument(doc);
+  await serialize(async () => {
+    busyDepth++;
+    try {
+      const doc = editor.document;
+      const key = doc.uri.toString();
+      const markers = markersForDocument(doc);
 
-  for (let line0 = doc.lineCount - 1; line0 >= 0; line0--) {
-    // 光标行每次迭代都现读，不在循环外缓存：collapseLine 内部会 await（editor.edit
-    // IPC + saveStore 落盘），光标在此期间可能被用户移到别处；缓存的旧值会让"正在
-    // 敲的行"在后续迭代里被误判成非光标行而遭吞掉，正是要避免的那种漏。
-    if (line0 === editor.selection?.active.line) continue; // 光标所在行可能正在被编辑，留给 selection 触发器
-    const lineText = doc.lineAt(line0).text;
-    if (findMarker(lineText, markers) === null) continue; // 无 marker，无事可做
-    await collapseLine(editor, line0);
-  }
+      for (let line0 = doc.lineCount - 1; line0 >= 0; line0--) {
+        // 光标行每次迭代都现读，不在循环外缓存：collapseLine 内部会 await（editor.edit
+        // IPC + saveStore 落盘），光标在此期间可能被用户移到别处；缓存的旧值会让"正在
+        // 敲的行"在后续迭代里被误判成非光标行而遭吞掉，正是要避免的那种漏。
+        if (line0 === editor.selection?.active.line) continue; // 光标所在行可能正在被编辑，留给 selection 触发器
+        const lineText = doc.lineAt(line0).text;
+        if (findMarker(lineText, markers) === null) continue; // 无 marker，无事可做
+        // 不带删除意图：这里遍历的是任意行，"没 marker"不等于"用户删了私记"。
+        await collapseLine(editor, line0);
+        // 这一行的 marker 已被扫掉，展开态记录必须同步作废——否则光标稍后离开时，
+        // 那条 stale 的 expandedLine 会带着删除意图再折叠一次干净的行，把标签误删。
+        if (expandedLines.get(key) === line0) expandedLines.set(key, null);
+      }
+    } finally {
+      busyDepth--;
+    }
+  });
 }
 
 // ── 提权 / 降格命令 ───────────────────────────────────────────────────────────

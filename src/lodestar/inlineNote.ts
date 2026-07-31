@@ -51,3 +51,18 @@ export function stripInlineNote(lineText: string, markers: string[]): string {
 export function toInlineText(code: string, note: string, marker: string): string {
   return `${code}  ${marker} ${note}`;
 }
+
+// 把整份文本逐行剥掉 marker 尾巴，行数与换行风格都不变（只替换行内内容，不碰
+// \r\n / \n 分隔符本身）。
+//
+// 这是「锚匹配前的归一化」：展开态的行文本含 `//me: 私记`，直接拿去跟标签的干净身份
+// 锚比对，相似度必然掉到 relocate.SIMILARITY_THRESHOLD 以下 → 整行上的标签（含同行
+// 并存的正式标签）被误判成失配。凡是要喂给 matchAnchor / reanchorTag / resolveTagLine
+// 的文件文本，都必须先过这里。
+export function stripInlineNotesFromText(
+  text: string,
+  markers: string[]
+): string {
+  if (markers.length === 0) return text;
+  return text.replace(/[^\r\n]+/g, line => stripInlineNote(line, markers));
+}

@@ -3,6 +3,7 @@
 node_modules/**
 src/**
 test/**
+test-e2e/**
 docs/**
 .git/**
 .github/**
@@ -19,3 +20,4 @@ package.lock.json
 tsconfig.json
 vitest.config.ts
 webpack.config.js
+.vscode-test.mjs

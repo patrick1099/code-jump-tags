@@ -16,6 +16,8 @@ function tagToStep(tag: TagNode): CodeTourStep {
   if (tag.original) step.original = tag.original;
   if (tag.notePosition) step.notePosition = tag.notePosition;
   if (tag.createdAt) step.createdAt = tag.createdAt;
+  // 随手私记的标记要一路传到装饰层：它只画行尾小字，不画 gutter 的 ⌖，也不画失配的 ?。
+  if (tag.inline) step.inline = true;
   return step;
 }
 
@@ -75,6 +77,8 @@ export const SUSPECT_TOUR_ID = "__suspect__";
 // Read-only "待处理" filter view: a synthetic tour gathering the suspect tags
 // (by id, in tree order). Tags still live in their real folders; this only
 // mirrors them for one-shot triage.
+// 随手私记不进这里：它们是行尾的一次性便条，不是要 triage 的正式标签。放进来会让
+// 侧边栏在任何一次失配抖动时被随手私记灌满 —— 用户明确要求随手绝不出现在侧边栏。
 export function suspectTour(
   store: LodestarStore,
   workspaceId: string,
@@ -85,7 +89,7 @@ export function suspectTour(
   const walk = (nodes: (FolderNode | TagNode)[]): void => {
     for (const node of nodes) {
       if (node.type === "tag") {
-        if (want.has(node.id)) tags.push(node);
+        if (want.has(node.id) && node.inline !== true) tags.push(node);
       } else {
         walk(node.children as (FolderNode | TagNode)[]);
       }

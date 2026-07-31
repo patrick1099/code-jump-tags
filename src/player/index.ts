@@ -32,14 +32,16 @@ import {
   getActiveStepMarker,
   getActiveTourNumber,
   getFileUri,
+  getRelativePath,
   getStepFileUri,
   getStepLabel,
   getTourTitle
 } from "../utils";
+import { isExcluded } from "../lodestar/exclude";
 import { registerCodeStatusModule } from "./codeStatus";
 import { registerPlayerCommands } from "./commands";
-import { registerInlineNotes } from "./inlineNotes";
-import { getTourSteps, registerDecorators } from "./decorator";
+import { excludePatterns, registerInlineNotes } from "./inlineNotes";
+import { registerDecorators } from "./decorator";
 import { registerFileSystemProvider } from "./fileSystem";
 import { registerTextDocumentContentProvider } from "./fileSystem/documentProvider";
 import { registerStatusBar } from "./status";
@@ -146,42 +148,32 @@ export async function focusPlayer() {
 }
 
 // Commenting-range provider for the gutter "+". While editing
-// (store.isRecording) we offer the "+" on every line EXCEPT lines that already
-// carry a tag. Reason: VS Code's native "+" always opens an EMPTY reply box and
-// can't be pre-filled or intercepted, so on a tagged line it would force an
-// "empty box → submit → real editor" detour. By withholding the "+" there, a
-// tagged line is edited directly by clicking its note (the CodeLens above the
-// line), with no empty box. Untagged lines still get the "+" to add a new tag.
+// (store.isRecording) EVERY line gets the "+", including lines that already
+// carry a tag.
 //
-// Note: VS Code queries this once per opened document and caches the result, so
-// a line tagged DURING this session keeps its "+" until the file is reopened
-// (refreshCommentingRanges tries to bust that cache; addTag also routes a
-// click on such a lingering "+" to the existing note so it's never destructive).
+// 这里以前是按「未打标签的行」拼范围的，已有标签的行被主动挖掉 —— 那就是「一行只能
+// 建一条标签」的物理成因：建完第一条，这行的 "+" 就消失了；而 getTourSteps 连随手
+// 私记也算在内，所以在行尾写一条随手注释同样会把该行的 "+" 干掉。0.8.x 的「一行多签」
+// 只落在了数据层和渲染层（hover 合并、CodeLens `⌖ A | ⌖ B`），创建入口一直没跟上。
+//
+// addTag（recorder/commands.ts）本来就是无条件新建一条标签，从不去改已有的那条，
+// 所以放开范围不会有「误编辑」的风险 —— 在已有标签的行上点 "+"，就是再加一条。
+// 编辑旧标签仍走它自己行上方的 CodeLens / 悬停里的 ✎。
 function makeCommentingRangeProvider() {
   return {
     provideCommentingRanges: async (document: TextDocument) => {
       if (!store.isRecording) {
         return null;
       }
-      const tagged = new Set<number>(
-        (await getTourSteps(document))
-          .map(([, , , line]) => line)
-          .filter((l): l is number => l !== undefined && l !== null)
-      );
-      // Build ranges over the runs of UNtagged lines. A commenting range's end
-      // line is INCLUSIVE, so a run that stops before tagged line `i` must end at
-      // `i - 1` — ending it at `i` would still expose the "+" on the tagged line.
-      const ranges: Range[] = [];
-      let start = 0; // first line of the current untagged run
-      for (let i = 0; i <= document.lineCount; i++) {
-        if (i === document.lineCount || tagged.has(i)) {
-          if (i - 1 >= start) {
-            ranges.push(new Range(start, 0, i - 1, 0));
-          }
-          start = i + 1;
+      if (document.uri.scheme === "file") {
+        const folders = workspace.workspaceFolders;
+        if (folders && folders.length > 0) {
+          const rel = getRelativePath(folders[0].uri.path, document.uri.path);
+          if (isExcluded(rel, excludePatterns())) return null;
         }
       }
-      return ranges;
+      if (document.lineCount === 0) return [];
+      return [new Range(0, 0, document.lineCount - 1, 0)];
     }
   };
 }

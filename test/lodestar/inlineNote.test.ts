@@ -4,8 +4,10 @@ import {
   findMarker,
   parseInlineNote,
   stripInlineNote,
+  stripInlineNotesFromText,
   toInlineText
 } from "../../src/lodestar/inlineNote";
+import { matchAnchor } from "../../src/lodestar/relocate";
 
 const M = ["//me:", "//?"]; // 完整 markers（已拼好行注释符）
 
@@ -62,6 +64,45 @@ describe("stripInlineNote", () => {
   it("剥掉 marker 段，保留缩进；无 marker 原样", () => {
     expect(stripInlineNote("    int x = f();  //me: 会溢出", M)).toBe("    int x = f();");
     expect(stripInlineNote("    int x = f();", M)).toBe("    int x = f();");
+  });
+});
+
+describe("stripInlineNotesFromText（锚匹配前的归一化）", () => {
+  it("逐行剥，行数与换行风格不变", () => {
+    const raw = "a();\r\n  b();  //me: 私记\r\nc();";
+    expect(stripInlineNotesFromText(raw, M)).toBe("a();\r\n  b();\r\nc();");
+    expect(stripInlineNotesFromText(raw, M).split(/\r?\n/).length).toBe(3);
+  });
+  it("空行/纯空白行原样保留（不塌行）", () => {
+    expect(stripInlineNotesFromText("a();\n\n   \nb();", M)).toBe("a();\n\n   \nb();");
+  });
+  it("无 markers 时原样返回", () => {
+    expect(stripInlineNotesFromText("x //me: y", [])).toBe("x //me: y");
+  });
+});
+
+// ③ 的回归闸：展开态的行必须不再把该行上的标签判成失配。
+describe("展开态 + 失配（回归）", () => {
+  const clean = "int x = f();";
+  const expanded = `${clean}  //me: 这里会溢出`;
+  const file = (line2: string) => `void g() {\n  ${line2}\n}\n`;
+
+  it("原文喂给 matchAnchor：正式标签被误判失配（记录病灶）", () => {
+    const m = matchAnchor(file(expanded), 2, clean, clean);
+    expect(m.status).not.toBe("original");
+  });
+
+  it("归一化后喂给 matchAnchor：判定健康", () => {
+    const canonical = stripInlineNotesFromText(file(expanded), M);
+    const m = matchAnchor(canonical, 2, clean, clean);
+    expect(m.status).toBe("original");
+  });
+
+  it("同一行并存的随手私记本身也判定健康", () => {
+    const canonical = stripInlineNotesFromText(file(expanded), M);
+    // 随手标签的 original 同样是剥净的代码（collapseLine 的约定）
+    const m = matchAnchor(canonical, 2, clean, undefined);
+    expect(m.status).toBe("original");
   });
 });
 
