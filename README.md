@@ -1,70 +1,88 @@
 # Code Jump Tags
 
-Code Jump Tags is a small VS Code extension for leaving private, clickable notes on important lines of code. Add a tag beside a line, organize tags into folders, and jump back later without turning the repo into a full guided tour.
+You are reverse-engineering an unfamiliar codebase, and by Thursday you have lost the five lines
+that actually mattered. Code Jump Tags pins a private, clickable note to a line, keeps the note on
+that line while the code moves around it, and lets you jump back from a tree or a copied link.
 
-It is useful when you are reverse-engineering a codebase, tracking review discoveries, leaving breadcrumbs for yourself, or collecting links you want to share with another developer.
+It is not a guided tour. Nothing is written into the source, and nothing has to be shared.
 
-## Features
+```
+  src/protocol/parser.c
+   41   ⌖ entry point  |  ⌖ check ordering here
+   42   static int parse_frame(const uint8_t *buf, size_t n)
+   43   {
+   44       if (!buf) return -1;                        💬 why not assert here?
+   45       uint16_t crc = crc16(buf, n - 2);
+ ? 46       return crc == read_u16(buf + n - 2);
+```
 
-- Add annotated line tags from the editor gutter. A line can hold **several** tags.
-- See a gutter marker on tagged lines, with the note rendered either above the line or at the end of it.
-- Hover a marked line to read every note on it, each with its own edit action.
-- **Scratch notes** — type `//me: something` at the end of a line and it folds away into a tag the moment your cursor leaves. The marker text disappears from the source; the note lives in the sidecar, never in your commits.
-- Tags follow their code. Rename a variable, cut and paste a whole line, edit in place — the tag stays on the line you meant.
-- Tags flag themselves as **suspect** when the file changed behind your back (another editor, a `git pull`, edits made while VS Code was closed), with a one-click way to re-point them.
-- Manage tags in the **Code Jump Tags** Explorer view: folders, nesting, drag and drop, reordering.
-- Copy a single tag or a whole folder as `vscode://` links.
-- Delete tags and folders into a recoverable trash list.
-- Store workspace tags in `.code-jump-tags/store.json`.
+Line 41 carries two tags rendered above the line. Line 44 carries a scratch note that lives in the
+sidecar, not in the file. The `?` on line 46 means the line changed where the extension could not
+watch it, so the tag is flagged rather than silently pointing at the wrong code.
 
-## Getting Started
+## Getting started
 
 1. Install the extension.
 2. Open a folder or workspace in VS Code.
-3. Open the **Code Jump Tags** view in Explorer.
-4. Click the plus button in the view title, or run **Code Jump Tags: Enter Tag Edit Mode** from the command palette.
+3. Open the Code Jump Tags view in Explorer.
+4. Click the plus button in the view title, or run `Code Jump Tags: Enter Tag Edit Mode` from the
+   command palette.
 5. Click the gutter `+` beside a line and enter your note.
-6. Click a tag in the tree, gutter hover, or copied link to jump back to that code location.
+6. Click a tag in the tree, in the gutter hover, or in a copied link to jump back.
 
-Tags are stored inside the current workspace. If an older `.lodestar` store exists, Code Jump Tags migrates it to `.code-jump-tags` on load.
+Tags are stored in `.code-jump-tags/store.json` inside the current workspace. If an older
+`.lodestar` store exists, it is migrated on load.
 
-## Common Workflows
+## What it does
 
-### Add A Tag
+- Several tags can share one line. Every `+` click adds another; they render side by side above the
+  line as `⌖ A | ⌖ B`, and the line's hover lists them all.
+- Scratch notes: type `//me: something` at the end of a line and it folds away the moment your
+  cursor leaves. The marker text disappears from the buffer and the note lives in the sidecar, so it
+  never reaches your commits. Put the cursor back and it expands again for editing.
+- Tags follow their code. Rename a variable, cut and paste the line, edit in place: the tag stays on
+  the line you meant.
+- Tags flag themselves as **suspect** when the file changed behind the extension's back.
+- Folders in the Explorer view, nested to any depth, with drag and drop and reordering.
+- Copy a tag or a whole folder as `vscode://` links.
+- Deletions go to a recoverable trash list.
 
-Enter tag edit mode, click the gutter `+` on the target line, write the note, and save it. Every `+` click adds a **new** tag — a line that already carries one still offers the `+`, so you can leave several independent notes on the same line. They render side by side above the line as `⌖ A | ⌖ B`, and the line's hover lists them all.
+## Common workflows
 
-### Edit A Tag
+### Edit a tag
 
-Click that tag's own short note above the line, or its `✎` in the gutter hover, or rename it from the tree. The edit bubble lets you save, cancel, or delete the note.
+Click the tag's own short note above the line, or its `✎` in the gutter hover, or rename it from the
+tree. The edit bubble lets you save, cancel, or delete.
 
-### Scratch Notes (`//me:`)
+### Scratch notes (`//me:`)
 
-For a thought you want next to the code but *not* in the repo: type `//me: ` followed by your note at the end of a line. Move the cursor away and the text folds — the marker vanishes from the buffer, the note is stored in `.code-jump-tags/`, and the line keeps only a small italic label floating at its end. Put the cursor back on that line and the text expands again so you can edit it in place.
+For a thought you want next to the code but out of the repo. To delete one, expand it and clear the
+text after the marker, then move the cursor off the line; it goes to the trash and can be restored.
 
-To delete one, expand it and delete the note text (or just clear the text after the marker), then move the cursor off the line. It goes to the trash and can be restored from there.
+Scratch notes deliberately stay out of your way: no gutter marker, no suspect marker, and no sidebar
+entry by default. Turn on `codeJumpTags.inlineNote.showSummaryGroup` for a read-only summary group at
+the top of the tree. The marker token is configurable, and the comment prefix follows the file's
+language (`//`, `#`, `--`, and so on).
 
-Scratch notes deliberately stay out of your way: no gutter marker, no suspect marker, and by default no entry in the sidebar. Turn on `codeJumpTags.inlineNote.showSummaryGroup` if you do want a read-only summary group at the top of the tree. The marker token is configurable, and the comment prefix follows the file's language (`//`, `#`, `--`, …).
+### When a tag loses its line
 
-### When A Tag Loses Its Line
+Every tag remembers the line's text as an immutable identity. While you edit inside VS Code the
+extension watches the change happen and keeps up, so editing a tagged line never marks it suspect.
 
-Every tag remembers the line's text as an immutable *identity*. While you edit inside VS Code the extension watches the change happen and simply keeps up — editing a tagged line never marks it suspect.
+When the file changes where the extension could not see it (another editor wrote to it, `git pull`
+rewrote it, it was edited while VS Code was closed), a tag whose identity no longer matches turns
+suspect: a grey `?` in the gutter, and a hover showing original identity against current content.
+From there you can adopt the new position, promoting the current line to the tag's new identity, or
+move the tag to the cursor line by hand. Suspect tags are also collected into a `⚠ 待处理` group at
+the top of the tree so you can clear them in one pass.
 
-When the file changes where the extension could not see it — another editor wrote to it, `git pull` rewrote it, it was edited while VS Code was closed — a tag whose identity no longer matches turns **suspect**: a grey `?` in the gutter, and a hover showing *original identity vs. current content*. From there you can **adopt the new position** (promote the current line to the tag's new identity) or **move the tag to the cursor line** by hand. Suspect tags are also collected into a `⚠ 待处理` group at the top of the tree so you can clear them in one pass.
+Suspect checks run at trigger points rather than on every keystroke. See the
+`codeJumpTags.recheckOn.*` settings below.
 
-Suspect checks run at trigger points, not on every keystroke — see the `codeJumpTags.recheckOn.*` settings.
+### Copy links
 
-### Organize Tags
-
-Use the **Code Jump Tags** tree to create folders, rename folders, move tags up or down, and drag tags into folders. Folders nest to any depth. A folder maps to a group of tags, not to a filesystem directory.
-
-### Copy Links
-
-Use **Copy as Link** on a tag to create a Markdown link backed by a `vscode://patrick1099.code-jump-tags/goto` deep link. Use **Copy Folder Links** to copy all links inside a folder.
-
-### Restore Deleted Tags
-
-Deleted tags and folders move to a trash list instead of being removed immediately. Use **Restore from Trash** from the view title to recover recent deletions.
+`Copy as Link` builds a Markdown link backed by a `vscode://patrick1099.code-jump-tags/goto` deep
+link. `Copy Folder Links` copies every link inside a folder.
 
 ## Settings
 
@@ -82,11 +100,15 @@ Deleted tags and folders move to a trash list instead of being removed immediate
 | `codeJumpTags.recheckOn.save` | `false` | Re-check on save. |
 | `codeJumpTags.recheckOn.idle` | `false` | Re-check after a pause in editing. |
 
-`codeJumpTags.exclude` defaults to `**/.code-jump-tags/**`, `**/.git/**`, `**/.vscode/**`, `**/node_modules/**`, `**/out/**`, `**/dist/**`, `**/build/**`.
+`codeJumpTags.exclude` defaults to `**/.code-jump-tags/**`, `**/.git/**`, `**/.vscode/**`,
+`**/node_modules/**`, `**/out/**`, `**/dist/**`, `**/build/**`.
 
-## Storage Format
+## Storage format
 
-The workspace data file is `.code-jump-tags/store.json`. It contains a tree of folders and tags plus a small trash list. You can commit this file if the notes are meant to be shared, or ignore it if the tags are personal — scratch notes in particular are meant to stay out of your commits, so keeping `.code-jump-tags/` untracked is the usual choice.
+The workspace data file is `.code-jump-tags/store.json`: a tree of folders and tags plus a small
+trash list. Commit it if the notes are meant to be shared, or ignore it if the tags are personal.
+Scratch notes in particular are meant to stay out of commits, so keeping `.code-jump-tags/`
+untracked is the usual choice.
 
 ## Development
 
@@ -108,4 +130,5 @@ Reload the VS Code window after installing a newly packaged VSIX.
 
 ## Credits
 
-Code Jump Tags is derived from Microsoft CodeTour and keeps the upstream MIT license. The public user experience has been refocused from guided tours to lightweight code tags and jump links.
+Code Jump Tags is derived from Microsoft CodeTour and keeps the upstream MIT license. The public
+user experience has been refocused from guided tours to lightweight code tags and jump links.
