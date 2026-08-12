@@ -1,5 +1,7 @@
 # Code Jump Tags
 
+[中文](https://github.com/patrick1099/code-jump-tags/blob/main/README.zh-CN.md) | **English**
+
 You are reverse-engineering an unfamiliar codebase, and by Thursday you have lost the five lines
 that actually mattered. Code Jump Tags pins a private, clickable note to a line, keeps the note on
 that line while the code moves around it, and lets you jump back from a tree or a copied link.
