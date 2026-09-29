@@ -380,6 +380,18 @@ export function moveNode(
   toParentId: string | null,
   index: number
 ): void {
+  // 先把落点定下来,再摘节点。childrenOf 在父 id 解析不出时会静默回落到
+  // store.tree,而根层的散标签在侧边栏根本不渲染(treeToTours 只取根层文件夹)
+  // —— 一旦目标解析失败,节点就被搬到根层"消失"了。宁可整个不动:给了
+  // toParentId 却指不到一个真文件夹,直接返回,原地不变。
+  let target: TreeNode[];
+  if (toParentId === null) {
+    target = store.tree;
+  } else {
+    const dest = findNode(store, toParentId);
+    if (!dest || dest.node.type !== "folder") return;
+    target = dest.node.children;
+  }
   const node = removeNode(store, id);
   if (!node) return;
   // An inbox folder graduates (loses its inbox role) the moment it leaves the
@@ -387,9 +399,32 @@ export function moveNode(
   if (node.type === "folder" && node.inbox && toParentId !== null) {
     delete node.inbox;
   }
-  const target = toParentId ? childrenOf(store, toParentId) : store.tree;
   const clamped = Math.max(0, Math.min(index, target.length));
   target.splice(clamped, 0, node);
+}
+
+// 按文件夹隐藏/显示编辑器里的标记。只动这个文件夹自己的标志,子文件夹的隐藏由
+// adapter 在派生 tour 时沿树继承。返回 false 表示 id 不是文件夹。
+export function setFolderHidden(
+  store: LodestarStore,
+  id: string,
+  hidden: boolean
+): boolean {
+  const found = findNode(store, id);
+  if (!found || found.node.type !== "folder") return false;
+  if (hidden) found.node.hidden = true;
+  else delete found.node.hidden;
+  return true;
+}
+
+// 文件夹自己或任一上级隐藏了标记就返回 true。
+export function isFolderHiddenDeep(store: LodestarStore, id: string): boolean {
+  let cur = findNode(store, id);
+  while (cur) {
+    if (cur.node.type === "folder" && cur.node.hidden) return true;
+    cur = cur.parent ? findNode(store, cur.parent.id) : undefined;
+  }
+  return false;
 }
 
 // Rename a folder. Renaming an inbox graduates it to a plain folder (its tags

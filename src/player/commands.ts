@@ -181,12 +181,28 @@ export function registerPlayerCommands() {
 
   vscode.commands.registerCommand(
     `${EXTENSION_NAME}.previousTourStep`,
-    moveCurrentCodeTourBackward
+    () => {
+      // 绑了快捷键之后必须防越界:原 moveCurrentCodeTourBackward 是裸 --step,
+      // 没有 activeTour 或已在第一步时直接提示,不动。
+      if (!store.activeTour) return;
+      if (store.activeTour.step <= 0) {
+        vscode.window.setStatusBarMessage("Code Jump Tags: 已是第一步", 2000);
+        return;
+      }
+      moveCurrentCodeTourBackward();
+    }
   );
 
   vscode.commands.registerCommand(
     `${EXTENSION_NAME}.nextTourStep`,
-    moveCurrentCodeTourForward
+    () => {
+      if (!store.activeTour) return;
+      if (store.activeTour.step >= store.activeTour.tour.steps.length - 1) {
+        vscode.window.setStatusBarMessage("Code Jump Tags: 已是最后一步", 2000);
+        return;
+      }
+      moveCurrentCodeTourForward();
+    }
   );
 
   vscode.commands.registerCommand(`${EXTENSION_NAME}.resumeTour`, focusPlayer);

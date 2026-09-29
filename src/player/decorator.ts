@@ -13,7 +13,7 @@ import {
   lineAnchorText,
   linePattern
 } from "../lodestar/relocate";
-import { CodeTourStep, CodeTourStepTuple, store } from "../store";
+import { CodeTour, CodeTourStep, CodeTourStepTuple, store } from "../store";
 import { getSuspect } from "../lodestar/suspect";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 import { lineLensTitles } from "./lensTitles";
@@ -58,6 +58,18 @@ const SUSPECT_DECORATOR = vscode.window.createTextEditorDecorationType({
   overviewRulerLane: vscode.OverviewRulerLane.Right,
   rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
 });
+
+// 隐藏文件夹里的标签默认不画;例外是顺读的当前步,以及刚从侧边栏跳到的那一行。
+// getTourSteps 本身不过滤 —— 行号跟随(trackLineShifts)要对隐藏的标签照常生效。
+function isStepVisible(tour: CodeTour, step: CodeTourStep): boolean {
+  if (!tour.markersHidden) return true;
+  const active = store.activeTour;
+  if (active && step.id && active.tour.steps[active.step]?.id === step.id) {
+    return true;
+  }
+  const r = store.revealedTag;
+  return !!r && r.file === step.file && r.line === step.line;
+}
 
 // Resolve every tag/step that lands in `document`, returning [tour, step,
 // stepNumber, line] tuples (line is 0-based, relocated by pattern when needed).
@@ -137,8 +149,11 @@ export async function updateDecorations(
     { createdAt: string; id: string; md: string }[]
   >();
 
-  for (const [, step, , line] of store.activeEditorSteps!) {
+  for (const [tour, step, , line] of store.activeEditorSteps!) {
     if (line === undefined || line === null || line >= editor.document.lineCount) {
+      continue;
+    }
+    if (!isStepVisible(tour, step)) {
       continue;
     }
     const full = (step.description || "").trim();
@@ -424,8 +439,11 @@ class TagCodeLensProvider implements vscode.CodeLensProvider {
     const steps = await getTourSteps(document);
     // 只取「行上方」样式、有解析出显示行的 step。
     const above = steps.filter(
-      ([, step, , line]) =>
-        line !== undefined && line !== null && stepNotePosition(step) === "above"
+      ([tour, step, , line]) =>
+        line !== undefined &&
+        line !== null &&
+        stepNotePosition(step) === "above" &&
+        isStepVisible(tour, step)
     );
 
     // 按显示行分组:同一行多条标签渲染成 `⌖ A | ⌖ B`,每条 lens 各自可点、
@@ -491,7 +509,11 @@ export async function registerDecorators() {
   reaction(
     () => [
       store.showMarkers,
-      store.allTours.map(tour => [tour.title, tour.steps])
+      store.allTours.map(tour => [tour.title, tour.markersHidden, tour.steps]),
+      store.revealedTag,
+      store.activeTour
+        ? store.activeTour.tour.steps[store.activeTour.step]?.id
+        : null
     ],
     () => {
       onDidChangeCodeLenses.fire();

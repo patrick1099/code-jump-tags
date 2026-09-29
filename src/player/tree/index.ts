@@ -18,7 +18,11 @@ import {
 import { AMBIENT_TOUR_ID, EXTENSION_NAME } from "../../constants";
 import { generatePreviewContent } from "..";
 import { store } from "../../store";
-import { CodeTourNode, CodeTourStepNode } from "./nodes";
+import {
+  CodeTourNode,
+  CodeTourStepNode,
+  FolderPlaceholderNode
+} from "./nodes";
 
 const LODESTAR_MIME = "application/vnd.code.tree.codeJumpTags";
 
@@ -67,7 +71,8 @@ class CodeTourTreeProvider
 
     let toParentId: string | null = null;
     let index = Number.MAX_SAFE_INTEGER;
-    if (target instanceof CodeTourNode) {
+    if (target instanceof CodeTourNode || target instanceof FolderPlaceholderNode) {
+      // 占位行代表它所属的空文件夹,落在它上面与落在文件夹头上等价。
       toParentId = target.tour.id.split("::").pop()!;
     } else if (target instanceof CodeTourStepNode && target.step?.id) {
       const found = findNode(store, target.step.id);
@@ -75,6 +80,10 @@ class CodeTourTreeProvider
         toParentId = found.parent ? found.parent.id : null;
         index = found.index;
       }
+    } else if (target !== undefined) {
+      // 落在一个认不出来的树项上。继续走下去 toParentId 会是 null,标签就被搬到
+      // 根层而在树上消失,所以这里什么都不做 —— 拖拽失败好过标签不见。
+      return;
     }
     for (const id of ids) {
       let dest = toParentId;
@@ -197,14 +206,19 @@ class CodeTourTreeProvider
           store.isRecording &&
           store.activeTour?.tour.id == element.tour.id
         ) {
-          const item = new TreeItem("Add tour step...");
+          const item = new FolderPlaceholderNode(
+            "Add tour step...",
+            element.tour
+          );
           item.command = {
             command: "codeJumpTags.addContentStep",
             title: "Add tour step..."
           };
           stepNodes = [item];
         } else {
-          stepNodes = [new TreeItem("No steps recorded")];
+          stepNodes = [
+            new FolderPlaceholderNode("No steps recorded", element.tour)
+          ];
         }
       } else {
         stepNodes = element.tour.steps.map(
@@ -235,7 +249,10 @@ class CodeTourTreeProvider
       .map(
         child =>
           new CodeTourNode(
-            folderToTour(child, wsId, { includeInline: false }),
+            folderToTour(child, wsId, {
+              includeInline: false,
+              parentHidden: node.tour.markersHidden === true
+            }),
             this.extensionPath
           )
       );
@@ -253,12 +270,17 @@ class CodeTourTreeProvider
         const { getStore, getWorkspaceId } = await import(
           "../../lodestar/persistence"
         );
-        const { findNode } = await import("../../lodestar/tree");
+        const { findNode, isFolderHiddenDeep } = await import("../../lodestar/tree");
         const { folderToTour } = await import("../../lodestar/adapter");
-        const found = findNode(getStore(), folderId);
+        const store = getStore();
+        const found = findNode(store, folderId);
         if (found && found.parent) {
+          const grand = findNode(store, found.parent.id)?.parent;
           return new CodeTourNode(
-            folderToTour(found.parent, getWorkspaceId(), { includeInline: false }),
+            folderToTour(found.parent, getWorkspaceId(), {
+              includeInline: false,
+              parentHidden: grand ? isFolderHiddenDeep(store, grand.id) : false
+            }),
             this.extensionPath
           );
         }

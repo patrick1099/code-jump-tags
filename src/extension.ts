@@ -6,6 +6,7 @@ import { initializeApi } from "./api";
 import { initializeGitApi } from "./git";
 import { registerLiveShareModule } from "./liveShare";
 import { registerLodestarCommands } from "./lodestar/commands";
+import { registerStoreWatcher } from "./lodestar/persistence";
 import { registerPlayerModule } from "./player";
 import { registerRecheckTriggers } from "./player/recheck";
 import { registerRecorderModule } from "./recorder";
@@ -100,6 +101,7 @@ export async function activate(context: vscode.ExtensionContext) {
     await discoverTours();
 
     initializeGitApi();
+    registerStoreWatcher(context);
   }
 
   return initializeApi(context);

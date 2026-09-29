@@ -23,7 +23,8 @@ import {
   deleteFromEditor,
   toggleNotePosition
 } from "./editThread";
-import { getStore, saveStore } from "./persistence";
+import { getStore, getWorkspaceId, loadStore, saveStore } from "./persistence";
+import { folderToDeepTour } from "./adapter";
 import { resolveTagLine, linePattern, lineAnchorText } from "./relocate";
 import {
   createFolder,
@@ -32,6 +33,7 @@ import {
   removeToTrash,
   renameFolderNode,
   restoreSelection,
+  setFolderHidden,
   retargetTag
 } from "./tree";
 import { TreeNode, TrashedEntry } from "./types";
@@ -95,6 +97,7 @@ export async function gotoLocation(
   const tag = findTagByLocation(getStore(), file, line);
   const resolved = resolveTagLine(text, line, tag?.original, tag?.text, pattern);
   const zero = Math.max(0, resolved - 1);
+  runtime.revealedTag = { file, line };
   const editor = await window.showTextDocument(doc, { preview: false });
   const pos = new Position(zero, 0);
   editor.selection = new Selection(pos, pos);
@@ -235,6 +238,18 @@ export async function renameFolder(node: any) {
   });
   if (title === undefined || title.trim() === "") return;
   renameFolderNode(store, folderId!, title.trim());
+  await saveStore();
+}
+
+// 文件夹行上的眼睛:隐藏/显示该文件夹(连同子文件夹)在编辑器里的标记。
+async function setFolderMarkersHidden(node: any, hidden: boolean) {
+  const tourId: string | undefined = node?.tour?.id;
+  const folderId = tourId ? tourId.split("::").pop() : undefined;
+  const store = getStore();
+  if (!folderId || !setFolderHidden(store, folderId, hidden)) {
+    window.showInformationMessage("Code Jump Tags: 找不到该文件夹");
+    return;
+  }
   await saveStore();
 }
 
@@ -815,6 +830,49 @@ export async function newSubfolder(node: any) {
   await saveStore();
 }
 
+// 顺读一个文件夹:深度优先把它整棵子树(含所有子文件夹)的正式标签合成一条 tour,
+// 从第一步开始播放。不能编辑(canEditTag=false)。合成分组(待处理/随手)没有真实
+// 文件夹,findNode 拿不到,按「找不到」提示返回。
+export async function readFolder(node: any) {
+  const tourId: string | undefined = node?.tour?.id;
+  const folderId = tourId ? tourId.split("::").pop() : undefined;
+  const found = folderId ? findNode(getStore(), folderId) : undefined;
+
+  // 合成分组(待处理 / 随手)没有真实文件夹节点,findNode 必然落空 —— 但它们本身
+  // 就是一条现成的合成 tour,顺读它们(逐个过一遍失配标签)本来就有意义,所以回退
+  // 到 node.tour 而不是报错。
+  const tour =
+    found && found.node.type === "folder"
+      ? folderToDeepTour(found.node, getWorkspaceId())
+      : node?.tour;
+
+  if (!tour) {
+    window.showInformationMessage(
+      "Code Jump Tags: 请在标签树的文件夹上右键使用「顺读此文件夹」"
+    );
+    return;
+  }
+  if (tour.steps.length === 0) {
+    window.showInformationMessage("Code Jump Tags: 该文件夹下没有标签");
+    return;
+  }
+  // 先收掉当前的 tour。编辑模式开着时 isRecording/isEditing 仍为真,startCodeTour
+  // 的非编辑分支不会清它们,于是第一步气泡以 Editing 态渲染(弹出输入框)、而且
+  // renderCurrentStep 在 isEditing 下不拼「上一步/下一步」链接。
+  if (runtime.activeTour) {
+    await endCurrentCodeTour(!isAmbientEditMode());
+  }
+  const workspaceRoot = workspace.workspaceFolders![0].uri;
+  startCodeTour(tour, 0, workspaceRoot, false, false);
+}
+
+// 手动重载 store.json(命令行工具在外部改写标签后的兜底)。loadStore 末尾自带
+// rebuildTours,树和装饰层随之刷新。
+export async function reloadStore() {
+  await loadStore();
+  window.setStatusBarMessage("Code Jump Tags: 标签已重新载入", 2000);
+}
+
 export function registerLodestarCommands(context: ExtensionContext) {
   // Use the real published id (publisher.name) for tag links, so they keep
   // working through any publisher rename. context.extension exists since VS Code
@@ -846,6 +904,12 @@ export function registerLodestarCommands(context: ExtensionContext) {
       copyFolderLinks
     ),
     commands.registerCommand(`${EXTENSION_NAME}.renameFolder`, renameFolder),
+    commands.registerCommand(`${EXTENSION_NAME}.hideFolderMarkers`, (node: any) =>
+      setFolderMarkersHidden(node, true)
+    ),
+    commands.registerCommand(`${EXTENSION_NAME}.showFolderMarkers`, (node: any) =>
+      setFolderMarkersHidden(node, false)
+    ),
     commands.registerCommand(`${EXTENSION_NAME}.renameTag`, renameTag),
     commands.registerCommand(`${EXTENSION_NAME}.editNote`, editNote),
     commands.registerCommand(`${EXTENSION_NAME}.saveTagEdit`, saveTagEdit),
@@ -880,6 +944,8 @@ export function registerLodestarCommands(context: ExtensionContext) {
     commands.registerCommand(`${EXTENSION_NAME}.redoMove`, redoMove),
     commands.registerCommand(`${EXTENSION_NAME}.undoTagMove`, undoTagMove),
     commands.registerCommand(`${EXTENSION_NAME}.promoteToOriginal`, promoteToOriginal),
-    commands.registerCommand(`${EXTENSION_NAME}.recheckCurrentFile`, recheckCurrentFile)
+    commands.registerCommand(`${EXTENSION_NAME}.recheckCurrentFile`, recheckCurrentFile),
+    commands.registerCommand(`${EXTENSION_NAME}.readFolder`, readFolder),
+    commands.registerCommand(`${EXTENSION_NAME}.reloadStore`, reloadStore)
   );
 }

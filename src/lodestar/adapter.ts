@@ -24,16 +24,45 @@ function tagToStep(tag: TagNode): CodeTourStep {
 export function folderToTour(
   folder: FolderNode,
   workspaceId: string,
-  opts: { includeInline?: boolean } = {}
+  opts: { includeInline?: boolean; parentHidden?: boolean } = {}
 ): CodeTour {
   const includeInline = opts.includeInline !== false; // 默认含
-  return {
+  const tour: CodeTour = {
     id: `${workspaceId}::${folder.id}`,
     title: folder.title,
     steps: folder.children
       .filter((c): c is TagNode => c.type === "tag")
       .filter(t => includeInline || !t.inline)
       .map(tagToStep)
+  };
+  if (folder.hidden) tour.hidden = true;
+  if (folder.hidden || opts.parentHidden) tour.markersHidden = true;
+  return tour;
+}
+
+// 深度优先顺读:把文件夹整棵子树(含所有层级子文件夹)的正式标签收进一条 tour,
+// 按树的自然顺序(同一层 children 数组的先后)。inline 随手私记被跳过 —— 顺读只
+// 关心要逐步讲解的正式标签。id/title 沿用 folderToTour 的格式,方便树上任意一层
+// 文件夹直接播放。
+export function folderToDeepTour(
+  folder: FolderNode,
+  workspaceId: string
+): CodeTour {
+  const steps: CodeTourStep[] = [];
+  const walk = (node: FolderNode): void => {
+    for (const child of node.children) {
+      if (child.type === "tag") {
+        if (child.inline !== true) steps.push(tagToStep(child));
+      } else {
+        walk(child);
+      }
+    }
+  };
+  walk(folder);
+  return {
+    id: `${workspaceId}::${folder.id}`,
+    title: folder.title,
+    steps
   };
 }
 
@@ -59,15 +88,19 @@ export function treeToAllTours(
 ): CodeTour[] {
   const tours: CodeTour[] = [];
 
-  function walk(nodes: (FolderNode | TagNode)[]): void {
+  // 隐藏沿树向下继承:上级隐藏了,子文件夹自己没标也算隐藏。
+  function walk(nodes: (FolderNode | TagNode)[], parentHidden: boolean): void {
     for (const node of nodes) {
       if (node.type === "folder") {
-        tours.push(folderToTour(node, workspaceId));
-        walk(node.children as (FolderNode | TagNode)[]);
+        tours.push(folderToTour(node, workspaceId, { parentHidden }));
+        walk(
+          node.children as (FolderNode | TagNode)[],
+          parentHidden || node.hidden === true
+        );
       }
     }
   }
-  walk(store.tree as (FolderNode | TagNode)[]);
+  walk(store.tree as (FolderNode | TagNode)[], false);
 
   return tours;
 }

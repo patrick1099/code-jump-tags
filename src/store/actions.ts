@@ -24,6 +24,9 @@ const CAN_EDIT_TOUR_KEY = `${EXTENSION_NAME}:canEditTag`;
 const IN_TOUR_KEY = `${EXTENSION_NAME}:inTags`;
 const RECORDING_KEY = `${EXTENSION_NAME}:recording`;
 export const EDITING_KEY = `${EXTENSION_NAME}:isEditing`;
+// 顺读(非编辑)态的独立上下文键。不能复用 inTags:编辑模式同样靠一个 ambient tour
+// 把 inTags 置真,拿它当快捷键 when 会在编辑标签时抢走顺读快捷键。
+const READING_KEY = `${EXTENSION_NAME}:reading`;
 
 const _onDidEndTour = new EventEmitter<CodeTour>();
 export const onDidEndTour = _onDidEndTour.event;
@@ -71,7 +74,9 @@ export function startCodeTour(
     store.isEditing = true;
     commands.executeCommand("setContext", RECORDING_KEY, true);
     commands.executeCommand("setContext", EDITING_KEY, true);
+    commands.executeCommand("setContext", READING_KEY, false);
   } else {
+    commands.executeCommand("setContext", READING_KEY, true);
     _onDidStartTour.fire([tour, step]);
   }
 }
@@ -120,6 +125,7 @@ export async function endCurrentCodeTour(fireEvent: boolean = true) {
 
   store.activeTour = null;
   commands.executeCommand("setContext", IN_TOUR_KEY, false);
+  commands.executeCommand("setContext", READING_KEY, false);
 
   window.visibleTextEditors.forEach(editor => {
     if (

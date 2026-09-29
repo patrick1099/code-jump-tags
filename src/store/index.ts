@@ -52,6 +52,8 @@ export interface CodeTour {
   nextTour?: string;
   stepMarker?: string;
   when?: string;
+  hidden?: boolean; // Code Jump Tags: 文件夹自己的隐藏标志
+  markersHidden?: boolean; // Code Jump Tags: 实际是否隐藏标记(自己或任一上级隐藏)
 }
 
 export interface ActiveTour {
@@ -92,6 +94,9 @@ export interface Store {
   isRecording: boolean;
   isEditing: boolean;
   showMarkers: boolean;
+  // Code Jump Tags: 最近一次从侧边栏跳到的标签位置。隐藏文件夹里的标签只有落在这里
+  // (或是顺读的当前步)时才临时画出来。
+  revealedTag: { file: string; line: number } | null;
   progress: CodeTourProgress[];
 }
 
@@ -105,5 +110,6 @@ export const store: Store = observable({
     return this.tours.length > 0;
   },
   showMarkers: false,
+  revealedTag: null,
   progress: []
 });

@@ -5,6 +5,7 @@ import {
   LOOSE_TOUR_ID,
   LOOSE_TITLE,
   folderToTour,
+  folderToDeepTour,
   suspectTour,
   SUSPECT_TOUR_ID,
   inlineTour,
@@ -231,5 +232,65 @@ describe("inlineTour", () => {
     const tour = inlineTour(noInline, "ws");
     expect(tour.title).toBe("💬 随手 (0)");
     expect(tour.steps).toEqual([]);
+  });
+});
+
+describe("folderToDeepTour", () => {
+  const nested: FolderNode = {
+    type: "folder", id: "f1", title: "第1章",
+    children: [
+      { type: "tag", id: "t1", note: "节A", file: "a.c", line: 1, createdAt: "x" },
+      {
+        type: "folder", id: "f2", title: "小节",
+        children: [
+          { type: "tag", id: "t2", note: "节B", file: "b.c", line: 2, createdAt: "x" },
+          { type: "tag", id: "t3", note: "节C", file: "c.c", line: 3, createdAt: "x" }
+        ]
+      },
+      { type: "tag", id: "t4", note: "节D", file: "d.c", line: 4, createdAt: "x" }
+    ]
+  };
+
+  it("深度优先收集整棵子树的正式标签,保持树序", () => {
+    const tour = folderToDeepTour(nested, "ws");
+    expect(tour.steps.map(s => s.id)).toEqual(["t1", "t2", "t3", "t4"]);
+  });
+
+  it("inline 随手私记被跳过", () => {
+    const folder: FolderNode = {
+      type: "folder", id: "f1", title: "组",
+      children: [
+        { type: "tag", id: "t1", note: "正式", file: "a.c", line: 1, createdAt: "x" },
+        { type: "tag", id: "inl", note: "随手", file: "a.c", line: 2, inline: true, createdAt: "x" }
+      ]
+    };
+    const tour = folderToDeepTour(folder, "ws");
+    expect(tour.steps.map(s => s.id)).toEqual(["t1"]);
+  });
+
+  it("空文件夹产出 steps 为空的 tour", () => {
+    const folder: FolderNode = { type: "folder", id: "f1", title: "空", children: [] };
+    const tour = folderToDeepTour(folder, "ws");
+    expect(tour.steps).toEqual([]);
+  });
+
+  it("自己没有直接标签、只含子文件夹时也能收集到子文件夹里的标签", () => {
+    const folder: FolderNode = {
+      type: "folder", id: "f1", title: "外层",
+      children: [
+        {
+          type: "folder", id: "f2", title: "内层",
+          children: [{ type: "tag", id: "t2", note: "内层标签", file: "b.c", line: 2, createdAt: "x" }]
+        }
+      ]
+    };
+    const tour = folderToDeepTour(folder, "ws");
+    expect(tour.steps.map(s => s.id)).toEqual(["t2"]);
+  });
+
+  it("tour 的 id 和 title 沿用 folderToTour 格式", () => {
+    const tour = folderToDeepTour(nested, "ws");
+    expect(tour.id).toBe("ws::f1");
+    expect(tour.title).toBe("第1章");
   });
 });

@@ -63,4 +63,26 @@ const webConfig = {
   }
 };
 
-module.exports = [nodeConfig, webConfig];
+// cjtag：给 AI / 脚本写标签的命令行入口。它只依赖 lodestar 的纯模块
+// (types / tree / relocate)，绝不 import vscode，所以既不要 web worker 那套
+// browserify 垫片(它要用真的 node fs)，也不需要把 vscode 列为 external。
+const cliConfig = {
+  ...config,
+  entry: "./src/cli/index.ts",
+  target: "node",
+  externals: {},
+  resolve: {
+    extensions: [".ts", ".js", ".json"]
+  },
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "cli.js",
+    devtoolModuleFilenameTemplate: "../[resource-path]"
+  },
+  plugins: [
+    ...config.plugins,
+    new webpack.BannerPlugin({ banner: "#!/usr/bin/env node", raw: true })
+  ]
+};
+
+module.exports = [nodeConfig, webConfig, cliConfig];

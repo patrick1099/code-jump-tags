@@ -56,15 +56,39 @@ export class CodeTourNode extends TreeItem {
       contextValues.push("active");
     }
 
+    // 合成分组(待处理 / 随手)不是真文件夹,不给眼睛。
+    const folderId = tour.id.split("::").pop();
+    if (folderId !== "__suspect__" && folderId !== "__inline__") {
+      contextValues.push(tour.hidden ? "markersHidden" : "markersShown");
+    }
+    if (tour.markersHidden) {
+      this.description += tour.hidden ? " · 标记已隐藏" : " · 随上级隐藏";
+    }
+
     this.contextValue = contextValues.join(".");
 
     this.iconPath = isRecording(tour)
       ? new ThemeIcon("record")
       : isActive
       ? new ThemeIcon("play-circle")
+      : tour.markersHidden
+      ? new ThemeIcon(
+          "eye-closed",
+          // @ts-ignore
+          new ThemeColor("disabledForeground")
+        )
       : progress.isComplete(tour)
       ? completeIcon
       : new ThemeIcon("location");
+  }
+}
+
+// 空文件夹展开后的占位行(「No steps recorded」/「Add tour step...」)。裸 TreeItem
+// 在拖放里无法反查所属文件夹,往它上面松手会让标签落到根层而看不见,所以让它自己
+// 带着那条文件夹 tour —— 落在占位行上就等同于落在文件夹上。
+export class FolderPlaceholderNode extends TreeItem {
+  constructor(label: string, public tour: CodeTour) {
+    super(label);
   }
 }
 

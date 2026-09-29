@@ -26,15 +26,13 @@ import {
   NOTE_INPUT_PROMPT,
   SMALL_ICON_URL
 } from "../constants";
-import { CodeTour, store } from "../store";
+import { store } from "../store";
 import { initializeStorage } from "../store/storage";
 import {
   getActiveStepMarker,
-  getActiveTourNumber,
   getFileUri,
   getRelativePath,
   getStepFileUri,
-  getStepLabel,
   getTourTitle
 } from "../utils";
 import { isExcluded } from "../lodestar/exclude";
@@ -247,41 +245,10 @@ const VIEW_COMMANDS = new Map([
   ["terminal", "terminal.focus"]
 ]);
 
-function getPreviousTour(): CodeTour | undefined {
-  const previousTour = store.tours.find(
-    tour => tour.nextTour === store.activeTour?.tour.title
-  );
-
-  if (previousTour) {
-    return previousTour;
-  }
-
-  const match = store.activeTour?.tour.title.match(/^#?(\d+)\s+-/);
-  if (match) {
-    const previousTourNumber = Number(match[1]) - 1;
-    return store.tours.find(tour =>
-      tour.title.match(new RegExp(`^#?${previousTourNumber}\\s+[-:]`))
-    );
-  }
-}
-
-function getNextTour(): CodeTour | undefined {
-  if (store.activeTour?.tour.nextTour) {
-    return store.tours.find(
-      tour => tour.title === store.activeTour?.tour.nextTour
-    );
-  } else {
-    const tourNumber = getActiveTourNumber();
-    if (tourNumber) {
-      const nextTourNumber = tourNumber + 1;
-      return store.tours.find(tour =>
-        tour.title.match(new RegExp(`^#?${nextTourNumber}\\s+[-:]`))
-      );
-    }
-  }
-}
-
 async function renderCurrentStep() {
+  // 顺读气泡默认折叠;用户手动展开/折叠后,VS Code 会把状态回写到旧 thread 上,
+  // 翻页时沿用它,免得每一步都要重新点开。新开一次顺读时 thread 为 null,回到折叠。
+  const previousState = store.activeTour!.thread?.collapsibleState;
   if (store.activeTour!.thread) {
     store.activeTour!.thread.dispose();
   }
@@ -335,61 +302,12 @@ async function renderCurrentStep() {
     store.isRecording && store.isEditing
       ? CommentMode.Editing
       : CommentMode.Preview;
-  let content = step.description;
+  const content = step.description;
 
-  let hasPreviousStep = currentStep > 0;
+  // 上一步/下一步/结束不再拼进正文,改由 comments/commentThread/title 菜单挂在
+  // 气泡标题栏(折叠按钮旁),按下面的 contextValue 决定显示哪几个。
+  const hasPreviousStep = currentStep > 0;
   const hasNextStep = currentStep < currentTour.steps.length - 1;
-  const isFinalStep = currentStep === currentTour.steps.length - 1;
-
-  const showNavigation = hasPreviousStep || hasNextStep || isFinalStep;
-  if (!store.isEditing && showNavigation) {
-    content += "\n\n---\n";
-
-    if (hasPreviousStep) {
-      const stepLabel = getStepLabel(
-        currentTour,
-        currentStep - 1,
-        false,
-        false
-      );
-      const suffix = stepLabel ? ` (${stepLabel})` : "";
-      content += `← [Previous${suffix}](command:codeJumpTags.previousTourStep "Navigate to previous step")`;
-    } else {
-      const previousTour = getPreviousTour();
-      if (previousTour) {
-        hasPreviousStep = true;
-
-        const tourTitle = getTourTitle(previousTour);
-        const argsContent = encodeURIComponent(
-          JSON.stringify([previousTour.title])
-        );
-        content += `← [Previous Tour (${tourTitle})](command:codeJumpTags.startTourByTitle?${argsContent} "Navigate to previous tour")`;
-      }
-    }
-
-    const prefix = hasPreviousStep ? " | " : "";
-    if (hasNextStep) {
-      const stepLabel = getStepLabel(
-        currentTour,
-        currentStep + 1,
-        false,
-        false
-      );
-      const suffix = stepLabel ? ` (${stepLabel})` : "";
-      content += `${prefix}[Next${suffix}](command:codeJumpTags.nextTourStep "Navigate to next step") →`;
-    } else if (isFinalStep) {
-      const nextTour = getNextTour();
-      if (nextTour) {
-        const tourTitle = getTourTitle(nextTour);
-        const argsContent = encodeURIComponent(
-          JSON.stringify([nextTour.title])
-        );
-        content += `${prefix}[Next Tour (${tourTitle})](command:codeJumpTags.finishTour?${argsContent} "Start next tour")`;
-      } else {
-        content += `${prefix}[Finish Tour](command:codeJumpTags.finishTour "Finish the tour")`;
-      }
-    }
-  }
 
   const comment = new CodeTourComment(
     content,
@@ -412,8 +330,9 @@ async function renderCurrentStep() {
   }
 
   store.activeTour!.thread.contextValue = contextValues.join(".");
-  store.activeTour!.thread.collapsibleState =
-    CommentThreadCollapsibleState.Expanded;
+  store.activeTour!.thread.collapsibleState = store.isRecording
+    ? CommentThreadCollapsibleState.Expanded
+    : previousState ?? CommentThreadCollapsibleState.Collapsed;
 
   let selection;
   if (step.selection) {

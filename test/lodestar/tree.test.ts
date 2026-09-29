@@ -81,6 +81,27 @@ describe("moveNode", () => {
     expect(s.tree.map(n => n.id)).toEqual(["f1"]);
     expect((f.children as any).map((n: any) => n.id)).toEqual(["1"]);
   });
+
+  // 回归:目标 id 解析不出来时曾经静默把节点搬到根层。根层散标签在侧边栏不渲染,
+  // 于是标签"消失"。现在整个不动。
+  it("leaves the tag put when the destination id doesn't exist", () => {
+    const s = createEmptyStore();
+    const f = createFolder(s, "F", () => "f1");
+    addTag(s, tag("1"), "f1");
+    moveNode(s, "1", "nope", 0);
+    expect(s.tree.map(n => n.id)).toEqual(["f1"]);
+    expect((f.children as any).map((n: any) => n.id)).toEqual(["1"]);
+  });
+
+  it("leaves the tag put when the destination id is a tag, not a folder", () => {
+    const s = createEmptyStore();
+    const f = createFolder(s, "F", () => "f1");
+    addTag(s, tag("1"), "f1");
+    addTag(s, tag("2"), "f1");
+    moveNode(s, "1", "2", 0);
+    expect((f.children as any).map((n: any) => n.id)).toEqual(["1", "2"]);
+    expect(s.tree.filter(n => n.type === "tag")).toHaveLength(0);
+  });
 });
 
 import {
