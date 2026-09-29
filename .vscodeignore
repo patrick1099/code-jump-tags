@@ -21,3 +21,4 @@ tsconfig.json
 vitest.config.ts
 webpack.config.js
 .vscode-test.mjs
+AGENTS.md
